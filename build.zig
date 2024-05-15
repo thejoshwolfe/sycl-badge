@@ -59,7 +59,6 @@ pub fn build(b: *Build) void {
         .root_source_file = .{ .path = "samples/feature_test.zig" },
     });
     feature_test_cart.install(b);
-    const watch_run_step = feature_test_cart.install_with_watcher(&dep, b, .{});
 
     const zeroman_cart = add_cart(&dep, b, .{
         .name = "zeroman",
@@ -70,6 +69,7 @@ pub fn build(b: *Build) void {
     zeroman_cart.install(b);
 
     const watch_step = b.step("watch", "");
+    const watch_run_step = zeroman_cart.install_with_watcher(&dep, b, .{});
     watch_step.dependOn(&watch_run_step.step);
 
     inline for (.{
