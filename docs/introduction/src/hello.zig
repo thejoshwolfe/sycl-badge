@@ -70,7 +70,10 @@ const Player = enum(u8) { x = 0, o = 1, none = std.math.maxInt(u8) };
 
 var selected_x: u8 = 0;
 var selected_y: u8 = 0;
-var control_cooldown: bool = false;
+var cooldown_left_right: bool = false;
+var cooldown_up_down: bool = false;
+var cooldown_select: bool = false;
+
 var turn: Player = .x;
 var state: [3][3]Player = @bitCast([1]Player{.none} ** 9);
 
@@ -117,12 +120,34 @@ fn scene_game() void {
         }
     }
 
-    if (!control_cooldown) {
-        if (cart.controls.left) selected_x -|= 1;
-        if (cart.controls.right and selected_x != 2) selected_x += 1;
-        if (cart.controls.up) selected_y -|= 1;
-        if (cart.controls.down and selected_y != 2) selected_y += 1;
-        if (cart.controls.select and state[selected_y][selected_x] == .none) {
+    if (cart.controls.left) {
+        if (selected_x > 0 and !cooldown_left_right) {
+            selected_x -= 1;
+        }
+        cooldown_left_right = true;
+    } else if (cart.controls.right) {
+        if (selected_x < 2 and !cooldown_left_right) {
+            selected_x += 1;
+        }
+        cooldown_left_right = true;
+    } else {
+        cooldown_left_right = false;
+    }
+    if (cart.controls.up) {
+        if (selected_y > 0 and !cooldown_up_down) {
+            selected_y -= 1;
+        }
+        cooldown_up_down = true;
+    } else if (cart.controls.down) {
+        if (selected_y < 2 and !cooldown_up_down) {
+            selected_y += 1;
+        }
+        cooldown_up_down = true;
+    } else {
+        cooldown_up_down = false;
+    }
+    if (cart.controls.select) {
+        if (!cooldown_select) {
             state[selected_y][selected_x] = turn;
             turn = switch (turn) {
                 .x => .o,
@@ -138,10 +163,10 @@ fn scene_game() void {
                 selected_y = 0;
             }
         }
+        cooldown_select = true;
+    } else {
+        cooldown_select = false;
     }
-
-    control_cooldown = false;
-    if (cart.controls.left or cart.controls.right or cart.controls.up or cart.controls.down or cart.controls.select) control_cooldown = true;
 }
 
 fn set_background() void {
@@ -156,9 +181,15 @@ fn set_background() void {
 
 fn check_win() bool {
     for (0..3) |i| {
+        // column
         if (state[i][0] != .none and state[i][0] == state[i][1] and state[i][1] == state[i][2]) return true;
+        // row
         if (state[0][i] != .none and state[0][i] == state[1][i] and state[1][i] == state[2][i]) return true;
     }
 
-    return (state[0][0] != .none and state[0][0] == state[1][1] and state[1][1] == state[2][2]) or (state[0][2] != .none and state[0][2] == state[1][1] and state[1][1] == state[2][0]);
+    // diagonal
+    if (state[0][0] != .none and state[0][0] == state[1][1] and state[1][1] == state[2][2]) return true;
+    if (state[0][2] != .none and state[0][2] == state[1][1] and state[1][1] == state[2][0]) return true;
+
+    return false;
 }
