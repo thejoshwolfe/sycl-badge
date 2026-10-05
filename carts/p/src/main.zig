@@ -33,7 +33,7 @@ pub fn update() void {
     if (background_animation_start) |t0| {
         const now = cart.micros_since_boot();
         const t = (now - t0) / 10_000;
-        if (t > 160 + 128 + 50) {
+        if (t > 160 + 128 and (new_controls.a or new_controls.b)) {
             background_animation_start = null;
             animation = .none;
             state = .{};
