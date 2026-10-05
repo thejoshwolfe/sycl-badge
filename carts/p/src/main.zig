@@ -1,3 +1,4 @@
+const sin = @import("std").math.sin;
 const cart = @import("cart-api");
 comptime {
     cart.export_start_code();
@@ -20,6 +21,7 @@ var animation: union(enum) {
     none,
     high_zap: struct { x: u8, y: u8, ttl: u64 },
 } = .none;
+var background_animation_start: ?u64 = null;
 
 pub fn update() void {
     const controls = cart.controls.*;
@@ -28,6 +30,16 @@ pub fn update() void {
         last_controls = controls;
     }
     defer draw();
+    if (background_animation_start) |t0| {
+        const now = cart.micros_since_boot();
+        const t = (now - t0) / 10_000;
+        if (t > 160 + 128 + 50) {
+            background_animation_start = null;
+            animation = .none;
+            state = .{};
+            updateWinCondition();
+        } else return;
+    }
 
     const old_pos = state.pos;
     if (new_controls.left and state.pos.x > 0) state.pos.x -= 1;
@@ -41,6 +53,7 @@ pub fn update() void {
 
 fn checkDots() void {
     const dot = &state.dots[state.pos.x][state.pos.y];
+    var check_for_zap = true;
     switch (dot.*) {
         .off => {
             dot.* = .mid;
@@ -50,13 +63,14 @@ fn checkDots() void {
         },
         .high => {
             dot.* = .off;
-            return;
+            check_for_zap = false;
         },
     }
 
     for (1..9) |x| {
         for (1..7) |y| {
-            if (state.dots[x][y] == .off and
+            if (check_for_zap and
+                state.dots[x][y] == .off and
                 state.dots[x - 1][y] == .mid and
                 state.dots[x + 1][y] == .mid and
                 state.dots[x][y - 1] == .mid and
@@ -70,6 +84,30 @@ fn checkDots() void {
                 } };
             }
         }
+    }
+
+    updateWinCondition();
+}
+
+fn updateWinCondition() void {
+    var high_count: u16 = 0;
+    for (1..9) |x| {
+        for (1..7) |y| {
+            if (state.dots[x][y] == .high) {
+                high_count += 1;
+            }
+        }
+    }
+    for (cart.neopixels, 0..) |*neopixel, i| {
+        if (i < high_count) {
+            neopixel.* = .{ .r = 0xff, .g = 0x0, .b = 0xff };
+        } else {
+            neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
+        }
+    }
+
+    if (high_count >= 5) {
+        background_animation_start = cart.micros_since_boot();
     }
 }
 
@@ -88,6 +126,7 @@ fn rgb256(r: u8, g: u8, b: u8) cart.DisplayColor {
 }
 
 fn draw() void {
+    const now = cart.micros_since_boot();
     for (0..160) |x| {
         for (0..128) |y| {
             cart.framebuffer[x][y] = if (state.pos.x * 16 + 3 <= x and x < state.pos.x * 16 + 13 and
@@ -96,7 +135,7 @@ fn draw() void {
                 blue
             else if (switch (animation) {
                 else => false,
-                .high_zap => |z| cart.micros_since_boot() < z.ttl and
+                .high_zap => |z| now < z.ttl and
                     (z.x * 16 + 7 <= x and x < z.x * 16 + 9 and z.y * 16 - 7 <= y and y < z.y * 16 + 23 or
                         z.y * 16 + 7 <= y and y < z.y * 16 + 9 and z.x * 16 - 7 <= x and x < z.x * 16 + 23),
             })
@@ -110,7 +149,18 @@ fn draw() void {
                 .off => black,
                 .mid => yellow,
                 .high => purple,
-            } else black;
+            } else if (background_animation_start) |t0| blk: {
+                const t = (now - t0) / 10_000;
+                if (t < x + y) break :blk black;
+                const f: f32 = @floatFromInt((t - (x + y)) / 10);
+                break :blk rgb256(
+                    0x80 + @as(u8, @intFromFloat(0x7f * sin(f))),
+                    0x80 + @as(u8, @intFromFloat(0x7f * sin(f + 1))),
+                    0x80 + @as(u8, @intFromFloat(0x7f * sin(f + 2))),
+                );
+            } else
+                // Background
+                black;
         }
     }
 }
