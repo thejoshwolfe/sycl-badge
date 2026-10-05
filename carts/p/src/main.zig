@@ -1,4 +1,3 @@
-const std = @import("std");
 const cart = @import("cart-api");
 comptime {
     cart.export_start_code();
@@ -7,49 +6,62 @@ comptime {
     assert(128 == cart.screen_height);
 }
 
-const border_width = 3;
-
 pub fn start() void {
+    checkDots();
     draw();
 }
 
-var last_controls: cart.Controls = .none;
+var last_controls: cart.Controls = @fromBackingInt(0xffff);
 var state: struct {
-    pos: struct { x: u8, y: u8 } = .{ .x = 0, .y = 0 },
-    dots: std.StaticBitSet(8 * 10) = .empty,
-
-    fn getDot(s: @This(), x: usize, y: usize) bool {
-        return s.dots.isSet(x * 8 + y);
-    }
-    fn setDot(s: *@This(), x: usize, y: usize, v: bool) void {
-        s.dots.setValue(x * 8 + y, v);
-    }
+    pos: packed struct(u16) { x: u8, y: u8 } = .{ .x = 0, .y = 0 },
+    dots: [10][8]enum { off, mid, high } = @splat(@splat(.off)),
 } = .{};
 
 pub fn update() void {
-    defer draw();
     const controls = cart.controls.*;
     const new_controls: cart.Controls = @fromBackingInt(@backingInt(controls) & ~@backingInt(last_controls));
     defer {
         last_controls = controls;
     }
+    defer draw();
 
-    if (new_controls.left and state.pos.x > 0) {
-        state.pos.x -= 1;
-    } else if (new_controls.right and state.pos.x < 9) {
-        state.pos.x += 1;
-    } else if (new_controls.up and state.pos.y > 0) {
-        state.pos.y -= 1;
-    } else if (new_controls.down and state.pos.y < 7) {
-        state.pos.y += 1;
+    const old_pos = state.pos;
+    if (new_controls.left and state.pos.x > 0) state.pos.x -= 1;
+    if (new_controls.right and state.pos.x < 9) state.pos.x += 1;
+    if (new_controls.up and state.pos.y > 0) state.pos.y -= 1;
+    if (new_controls.down and state.pos.y < 7) state.pos.y += 1;
+    if (old_pos != state.pos) {
+        checkDots();
     }
-    state.setDot(state.pos.x, state.pos.y, true);
+}
+
+fn checkDots() void {
+    const dot = &state.dots[state.pos.x][state.pos.y];
+    dot.* = switch (dot.*) {
+        .off => .mid,
+        .mid => .off,
+        .high => .high,
+    };
+
+    for (1..9) |x| {
+        for (1..7) |y| {
+            if (state.dots[x][y] == .off and
+                state.dots[x - 1][y] == .mid and
+                state.dots[x + 1][y] == .mid and
+                state.dots[x][y - 1] == .mid and
+                state.dots[x][y + 1] == .mid)
+            {
+                state.dots[x][y] = .high;
+            }
+        }
+    }
 }
 
 const black = rgb256(0, 0, 0);
 const white = rgb256(0xff, 0xff, 0xff);
 const yellow = rgb256(0xff, 0xff, 0x54);
 const blue = rgb256(0x88, 0x88, 0xff);
+const purple = rgb256(0x88, 0x0, 0x88);
 /// Brain is easier typing in a familiar format. It's all an approximation anyway.
 fn rgb256(r: u8, g: u8, b: u8) cart.DisplayColor {
     return .{
@@ -73,11 +85,12 @@ fn draw() void {
                 pos_top <= y and y < pos_bottom)
                 // Cursor
                 blue
-            else if ((x + 10) % 16 < 4 and (y + 10) % 16 < 4 and state.getDot(x >> 4, y >> 4))
+            else if ((x + 10) % 16 < 4 and (y + 10) % 16 < 4) switch (state.dots[x >> 4][y >> 4]) {
                 // Center dots
-                yellow
-            else
-                black;
+                .off => black,
+                .mid => yellow,
+                .high => purple,
+            } else black;
         }
     }
 }
