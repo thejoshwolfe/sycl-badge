@@ -79,6 +79,11 @@ pub fn build(b: *Build) void {
         .root_source_file = b.path("carts/zig-zag-zoe/main.zig"),
     });
     add_cart(b, &dep, .{
+        .name = "p",
+        .optimize = .ReleaseSmall,
+        .root_source_file = b.path("carts/p/src/main.zig"),
+    });
+    add_cart(b, &dep, .{
         .name = "lcd-text",
         .optimize = .ReleaseSmall,
         .root_source_file = b.path("carts/lcd-text/src/main.zig"),
