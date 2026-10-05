@@ -41,11 +41,18 @@ pub fn update() void {
 
 fn checkDots() void {
     const dot = &state.dots[state.pos.x][state.pos.y];
-    dot.* = switch (dot.*) {
-        .off => .mid,
-        .mid => .off,
-        .high => .high,
-    };
+    switch (dot.*) {
+        .off => {
+            dot.* = .mid;
+        },
+        .mid => {
+            dot.* = .off;
+        },
+        .high => {
+            dot.* = .off;
+            return;
+        },
+    }
 
     for (1..9) |x| {
         for (1..7) |y| {
