@@ -16,6 +16,10 @@ var state: struct {
     pos: packed struct(u16) { x: u8, y: u8 } = .{ .x = 0, .y = 0 },
     dots: [10][8]enum { off, mid, high } = @splat(@splat(.off)),
 } = .{};
+var animation: union(enum) {
+    none,
+    high_zap: struct { x: u8, y: u8, ttl: u64 },
+} = .none;
 
 pub fn update() void {
     const controls = cart.controls.*;
@@ -52,6 +56,11 @@ fn checkDots() void {
                 state.dots[x][y + 1] == .mid)
             {
                 state.dots[x][y] = .high;
+                animation = .{ .high_zap = .{
+                    .x = @intCast(x),
+                    .y = @intCast(y),
+                    .ttl = cart.micros_since_boot() + 200_000,
+                } };
             }
         }
     }
@@ -61,7 +70,7 @@ const black = rgb256(0, 0, 0);
 const white = rgb256(0xff, 0xff, 0xff);
 const yellow = rgb256(0xff, 0xff, 0x54);
 const blue = rgb256(0x88, 0x88, 0xff);
-const purple = rgb256(0x88, 0x0, 0x88);
+const purple = rgb256(0xaa, 0x0, 0xaa);
 /// Brain is easier typing in a familiar format. It's all an approximation anyway.
 fn rgb256(r: u8, g: u8, b: u8) cart.DisplayColor {
     return .{
@@ -72,19 +81,23 @@ fn rgb256(r: u8, g: u8, b: u8) cart.DisplayColor {
 }
 
 fn draw() void {
-    const pos_left = state.pos.x * 16 + 3;
-    const pos_right = state.pos.x * 16 + 13;
-    const pos_top = state.pos.y * 16 + 3;
-    const pos_bottom = state.pos.y * 16 + 13;
     for (0..160) |x| {
         for (0..128) |y| {
-            cart.framebuffer[x][y] = if ((x + 1) % 16 <= 1 or (y + 1) % 16 <= 1)
-                // Grid border
-                yellow
-            else if (pos_left <= x and x < pos_right and
-                pos_top <= y and y < pos_bottom)
+            cart.framebuffer[x][y] = if (state.pos.x * 16 + 3 <= x and x < state.pos.x * 16 + 13 and
+                state.pos.y * 16 + 3 <= y and y < state.pos.y * 16 + 13)
                 // Cursor
                 blue
+            else if (switch (animation) {
+                else => false,
+                .high_zap => |z| cart.micros_since_boot() < z.ttl and
+                    (z.x * 16 + 7 <= x and x < z.x * 16 + 9 and z.y * 16 - 7 <= y and y < z.y * 16 + 23 or
+                        z.y * 16 + 7 <= y and y < z.y * 16 + 9 and z.x * 16 - 7 <= x and x < z.x * 16 + 23),
+            })
+                // Zap animation
+                purple
+            else if ((x + 1) % 16 <= 1 or (y + 1) % 16 <= 1)
+                // Grid border
+                yellow
             else if ((x + 10) % 16 < 4 and (y + 10) % 16 < 4) switch (state.dots[x >> 4][y >> 4]) {
                 // Center dots
                 .off => black,
