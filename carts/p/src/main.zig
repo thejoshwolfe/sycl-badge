@@ -95,7 +95,7 @@ fn checkDots(level: u8) void {
         for (0..8) |y| {
             switch (level) {
                 else => unreachable,
-                1 => {
+                1, 3 => {
                     if (isCursorAt(x, y)) {
                         output[x][y] = switch (state.dots[x][y]) {
                             .off => .mid,
@@ -121,7 +121,7 @@ fn checkDots(level: u8) void {
     // Large checks.
     switch (level) {
         else => unreachable,
-        1 => {
+        1, 3 => {
             for (0..10) |x| {
                 for (0..8) |y| {
                     if (state.dots[x][y] == .off and isCross(x, y, .mid)) {
@@ -224,6 +224,15 @@ fn updateWinCondition(level: u8) void {
                 winning = true;
             }
         },
+        3 => {
+            // ¿+¯÷¶
+            if (isCross(state.pos.x, state.pos.y, .high)) {
+                for (cart.neopixels) |*neopixel| neopixel.* = .{ .r = 0xff, .g = 0x0, .b = 0xff };
+                winning = true;
+            } else {
+                for (cart.neopixels) |*neopixel| neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
+            }
+        },
     }
 
     if (winning) {
@@ -278,6 +287,11 @@ fn drawLevelTitle(level: u8) void {
             drawTextCentered("Level 2", 30, 2, white);
             drawTextCentered("\xbf+_\xf7+. \xbb.\xf7\xbb\xaf", 55, 1, blue);
             drawTextCentered("80\xaf\xf7\xb6", 70, 1, blue);
+        },
+        3 => {
+            drawTextCentered("Level 3", 30, 2, white);
+            drawTextCentered("_\xbf\xf7. .\xbf\xf7_ \xaf\xbf\xf7_", 55, 1, blue);
+            drawTextCentered("_+.\xf7\xaf \xbf+\xaf\xf7\xb6", 70, 1, blue);
         },
     }
 }
