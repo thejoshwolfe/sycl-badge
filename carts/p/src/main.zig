@@ -8,36 +8,66 @@ comptime {
 }
 
 pub fn start() void {
-    checkDots();
     draw();
 }
 
+const Dot = enum { off, mid, high };
+
 var last_controls: cart.Controls = @fromBackingInt(0xffff);
+var super_state: union(enum) {
+    main_menu,
+    level_title: u8,
+    level: u8,
+    level_select,
+} = .{ .level_title = 1 };
 var state: struct {
     pos: packed struct(u16) { x: u8, y: u8 } = .{ .x = 0, .y = 0 },
-    dots: [10][8]enum { off, mid, high } = @splat(@splat(.off)),
+    dots: [10][8]Dot = @splat(@splat(.off)),
+    zap_animation: ?struct { x: u8, y: u8, ttl: u64 } = null,
+    background_animation_start: ?u64 = null,
 } = .{};
-var animation: union(enum) {
-    none,
-    high_zap: struct { x: u8, y: u8, ttl: u64 },
-} = .none;
-var background_animation_start: ?u64 = null;
 
 pub fn update() void {
+    defer draw();
     const controls = cart.controls.*;
     const new_controls: cart.Controls = @fromBackingInt(@backingInt(controls) & ~@backingInt(last_controls));
     defer {
         last_controls = controls;
     }
-    defer draw();
-    if (background_animation_start) |t0| {
+
+    switch (super_state) {
+        .main_menu => unreachable, // TODO
+        .level_title => |level| {
+            if (new_controls.a) {
+                beginLevel(level);
+                return;
+            }
+        },
+        .level => |level| {
+            updateLevel(level, new_controls);
+        },
+        .level_select => unreachable, // TODO
+    }
+}
+
+fn updateLevel(level: u8, new_controls: cart.Controls) void {
+    // Meta navigation.
+    if (new_controls.b) {
+        // Reset.
+        super_state = .{ .level_title = level };
+        return;
+    }
+    if (new_controls.select) {
+        // Exit. TODO
+        return;
+    }
+    if (state.background_animation_start) |t0| {
+        // Winning.
         const now = cart.micros_since_boot();
         const t = (now - t0) / 10_000;
-        if (t > 160 + 128 and (new_controls.a or new_controls.b)) {
-            background_animation_start = null;
-            animation = .none;
-            state = .{};
-            updateWinCondition();
+        if (t > 160 + 128 and new_controls.a) {
+            super_state = .{ .level_title = level + 1 };
+            updateWinCondition(level + 1);
         } else return;
     }
 
@@ -47,67 +77,157 @@ pub fn update() void {
     if (new_controls.up and state.pos.y > 0) state.pos.y -= 1;
     if (new_controls.down and state.pos.y < 7) state.pos.y += 1;
     if (old_pos != state.pos) {
-        checkDots();
+        checkDots(level);
     }
 }
 
-fn checkDots() void {
-    const dot = &state.dots[state.pos.x][state.pos.y];
-    var check_for_zap = true;
-    switch (dot.*) {
-        .off => {
-            dot.* = .mid;
-        },
-        .mid => {
-            dot.* = .off;
-        },
-        .high => {
-            dot.* = .off;
-            check_for_zap = false;
-        },
-    }
-
-    for (1..9) |x| {
-        for (1..7) |y| {
-            if (check_for_zap and
-                state.dots[x][y] == .off and
-                state.dots[x - 1][y] == .mid and
-                state.dots[x + 1][y] == .mid and
-                state.dots[x][y - 1] == .mid and
-                state.dots[x][y + 1] == .mid)
-            {
-                state.dots[x][y] = .high;
-                animation = .{ .high_zap = .{
-                    .x = @intCast(x),
-                    .y = @intCast(y),
-                    .ttl = cart.micros_since_boot() + 200_000,
-                } };
-            }
-        }
-    }
-
-    updateWinCondition();
+fn beginLevel(level: u8) void {
+    super_state = .{ .level = level };
+    state = .{};
+    checkDots(level);
 }
 
-fn updateWinCondition() void {
-    var high_count: u16 = 0;
-    for (1..9) |x| {
-        for (1..7) |y| {
-            if (state.dots[x][y] == .high) {
-                high_count += 1;
+fn checkDots(level: u8) void {
+    var output = state.dots;
+
+    // Per-cell checks.
+    for (0..10) |x| {
+        for (0..8) |y| {
+            switch (level) {
+                else => unreachable,
+                1 => {
+                    if (isCursorAt(x, y)) {
+                        output[x][y] = switch (state.dots[x][y]) {
+                            .off => .mid,
+                            .mid, .high => .off,
+                        };
+                    }
+                },
+                2 => {
+                    // ¿+_÷+.
+                    if (isCursorAt(x, y) and isCross(x, y, .off)) {
+                        fillCross(&output, x, y, .mid);
+                    }
+                    // ¯÷+¯
+                    if (state.dots[x][y] == .high) {
+                        fillCross(&output, x, y, .high);
+                    }
+                },
             }
         }
     }
-    for (cart.neopixels, 0..) |*neopixel, i| {
-        if (i < high_count) {
-            neopixel.* = .{ .r = 0xff, .g = 0x0, .b = 0xff };
-        } else {
-            neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
-        }
+    state.dots = output;
+
+    // Large checks.
+    switch (level) {
+        else => unreachable,
+        1 => {
+            for (0..10) |x| {
+                for (0..8) |y| {
+                    if (state.dots[x][y] == .off and isCross(x, y, .mid)) {
+                        output[x][y] = .high;
+                        state.zap_animation = .{
+                            .x = @intCast(x),
+                            .y = @intCast(y),
+                            .ttl = cart.micros_since_boot() + 200_000,
+                        };
+                    }
+                }
+            }
+        },
+        2 => {
+            // ».÷»¯
+            for (0..8) |y| {
+                if (isRow(y, .mid)) {
+                    for (0..10) |x| {
+                        output[x][y] = .high;
+                    }
+                }
+            }
+        },
     }
 
-    if (high_count >= 5) {
-        background_animation_start = cart.micros_since_boot();
+    state.dots = output;
+
+    updateWinCondition(level);
+}
+
+fn isCursorAt(x: usize, y: usize) bool {
+    return state.pos.x == x and state.pos.y == y;
+}
+
+fn isCross(x: usize, y: usize, value: Dot) bool {
+    if (x == 0 or x == 9 or y == 0 or y == 7) return false; // Too close to the edge.
+    return (state.dots[x - 1][y] == value and
+        state.dots[x + 1][y] == value and
+        state.dots[x][y - 1] == value and
+        state.dots[x][y + 1] == value);
+}
+
+fn isRow(y: usize, value: Dot) bool {
+    for (0..10) |x| {
+        if (state.dots[x][y] != value) return false;
+    }
+    return true;
+}
+
+fn fillCross(output: *[10][8]Dot, x: usize, y: usize, value: Dot) void {
+    if (x > 0) output[x - 1][y] = value;
+    if (x < 9) output[x + 1][y] = value;
+    if (y > 0) output[x][y - 1] = value;
+    if (y < 7) output[x][y + 1] = value;
+}
+
+fn updateWinCondition(level: u8) void {
+    var winning = false;
+
+    switch (level) {
+        else => unreachable,
+        1 => {
+            var high_count: u16 = 0;
+            for (0..10) |x| {
+                for (0..8) |y| {
+                    if (state.dots[x][y] == .high) {
+                        high_count += 1;
+                    }
+                }
+            }
+            for (cart.neopixels, 0..) |*neopixel, i| {
+                if (i < high_count) {
+                    neopixel.* = .{ .r = 0xff, .g = 0x0, .b = 0xff };
+                } else {
+                    neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
+                }
+            }
+            if (high_count >= 5) {
+                winning = true;
+            }
+        },
+        2 => {
+            // 80¯÷¶
+            var high_count: u16 = 0;
+            for (0..10) |x| {
+                for (0..8) |y| {
+                    if (state.dots[x][y] == .high) {
+                        high_count += 1;
+                    }
+                }
+            }
+            for (cart.neopixels, 0..) |*neopixel, i| {
+                if (i < high_count / 16) {
+                    neopixel.* = .{ .r = 0xff, .g = 0x0, .b = 0xff };
+                } else {
+                    neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
+                }
+            }
+            if (high_count >= 80) {
+                winning = true;
+            }
+        },
+    }
+
+    if (winning) {
+        state.background_animation_start = cart.micros_since_boot();
     }
 }
 
@@ -126,41 +246,85 @@ fn rgb256(r: u8, g: u8, b: u8) cart.DisplayColor {
 }
 
 fn draw() void {
+    switch (super_state) {
+        .main_menu => unreachable, // TODO
+        .level_title => |level| {
+            drawLevelTitle(level);
+        },
+        .level => {
+            drawLevel();
+        },
+        .level_select => unreachable, // TODO
+    }
+}
+
+fn drawLevelTitle(level: u8) void {
+    cart.rect(.{ .x = 0, .y = 0, .width = 160, .height = 128, .fill_color = black });
+    for (cart.neopixels) |*neopixel| neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
+
+    // ¿ \xbf
+    // ÷ \xf7
+    // ¯ \xaf
+    // ¶ \xb6
+    // » \xbb
+    switch (level) {
+        else => unreachable,
+        1 => {
+            drawTextCentered("Level 1", 30, 2, white);
+            drawTextCentered("_\xbf\xf7. .\xbf\xf7_ \xaf\xbf\xf7_", 55, 1, blue);
+            drawTextCentered("_+.\xf7\xaf 5\xaf\xf7\xb6", 70, 1, blue);
+        },
+        2 => {
+            drawTextCentered("Level 2", 30, 2, white);
+            drawTextCentered("\xbf+_\xf7+. \xbb.\xf7\xbb\xaf", 55, 1, blue);
+            drawTextCentered("80\xaf\xf7\xb6", 70, 1, blue);
+        },
+    }
+}
+
+fn drawTextCentered(str: []const u8, y: u8, scale: u3, color: cart.DisplayColor) void {
+    const str_width = @as(u8, @intCast(str.len)) * cart.font_width * scale;
+    const x = @as(u8, @intCast(160 / 2)) - @as(u8, @intCast(str_width / 2));
+    cart.text(.{ .str = str, .x = x, .y = y, .scale = scale, .text_color = color });
+}
+
+fn drawLevel() void {
     const now = cart.micros_since_boot();
     for (0..160) |x| {
         for (0..128) |y| {
-            cart.framebuffer[x][y] = if (state.pos.x * 16 + 3 <= x and x < state.pos.x * 16 + 13 and
-                state.pos.y * 16 + 3 <= y and y < state.pos.y * 16 + 13)
+            cart.framebuffer[x][y] = blk: {
                 // Cursor
-                blue
-            else if (switch (animation) {
-                else => false,
-                .high_zap => |z| now < z.ttl and
-                    (z.x * 16 + 7 <= x and x < z.x * 16 + 9 and z.y * 16 - 7 <= y and y < z.y * 16 + 23 or
-                        z.y * 16 + 7 <= y and y < z.y * 16 + 9 and z.x * 16 - 7 <= x and x < z.x * 16 + 23),
-            })
+                if (state.pos.x * 16 + 3 <= x and x < state.pos.x * 16 + 13 and
+                    state.pos.y * 16 + 3 <= y and y < state.pos.y * 16 + 13)
+                    break :blk blue;
                 // Zap animation
-                purple
-            else if ((x + 1) % 16 <= 1 or (y + 1) % 16 <= 1)
+                if (state.zap_animation) |z| {
+                    if (now < z.ttl and
+                        (z.x * 16 + 7 <= x and x < z.x * 16 + 9 and z.y * 16 - 7 <= y and y < z.y * 16 + 23 or
+                            z.y * 16 + 7 <= y and y < z.y * 16 + 9 and z.x * 16 - 7 <= x and x < z.x * 16 + 23))
+                        break :blk purple;
+                }
                 // Grid border
-                yellow
-            else if ((x + 10) % 16 < 4 and (y + 10) % 16 < 4) switch (state.dots[x >> 4][y >> 4]) {
+                if ((x + 1) % 16 <= 1 or (y + 1) % 16 <= 1) break :blk yellow;
                 // Center dots
-                .off => black,
-                .mid => yellow,
-                .high => purple,
-            } else if (background_animation_start) |t0| blk: {
-                const t = (now - t0) / 10_000;
-                if (t < x + y) break :blk black;
-                const f: f32 = @floatFromInt((t - (x + y)) / 10);
-                break :blk rgb256(
-                    0x80 + @as(u8, @intFromFloat(0x7f * sin(f))),
-                    0x80 + @as(u8, @intFromFloat(0x7f * sin(f + 1))),
-                    0x80 + @as(u8, @intFromFloat(0x7f * sin(f + 2))),
-                );
-            } else
+                if ((x + 10) % 16 < 4 and (y + 10) % 16 < 4) break :blk switch (state.dots[x >> 4][y >> 4]) {
+                    .off => black,
+                    .mid => yellow,
+                    .high => purple,
+                };
+                if (state.background_animation_start) |t0| {
+                    const t = (now - t0) / 10_000;
+                    if (t < x + y) break :blk black;
+                    const f: f32 = @floatFromInt((t - (x + y)) / 10);
+                    break :blk rgb256(
+                        0x80 + @as(u8, @intFromFloat(0x7f * sin(f))),
+                        0x80 + @as(u8, @intFromFloat(0x7f * sin(f + 1))),
+                        0x80 + @as(u8, @intFromFloat(0x7f * sin(f + 2))),
+                    );
+                }
                 // Background
-                black;
+                break :blk black;
+            };
         }
     }
 }
