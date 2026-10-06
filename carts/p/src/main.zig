@@ -18,8 +18,8 @@ var super_state: union(enum) {
     main_menu,
     level_title: u8,
     level: u8,
-    level_select,
-} = .{ .level_title = 1 };
+    level_select: u8,
+} = .main_menu;
 var state: struct {
     pos: packed struct(u16) { x: u8, y: u8 } = .{ .x = 0, .y = 0 },
     dots: [10][8]Dot = @splat(@splat(.off)),
@@ -36,17 +36,42 @@ pub fn update() void {
     }
 
     switch (super_state) {
-        .main_menu => unreachable, // TODO
+        .main_menu => {
+            if (new_controls.a) {
+                super_state = .{ .level_title = 1 };
+            }
+            if (new_controls.select) {
+                super_state = .{ .level_select = 1 };
+            }
+        },
         .level_title => |level| {
+            if (new_controls.start) {
+                super_state = .main_menu;
+            }
+            if (new_controls.select) {
+                super_state = .{ .level_select = level };
+            }
             if (new_controls.a) {
                 beginLevel(level);
-                return;
             }
         },
         .level => |level| {
             updateLevel(level, new_controls);
         },
-        .level_select => unreachable, // TODO
+        .level_select => |level| {
+            if (new_controls.a) {
+                super_state = .{ .level_title = level };
+            }
+            if (new_controls.start) {
+                super_state = .main_menu;
+            }
+            if (new_controls.up and level > 1) {
+                super_state = .{ .level_select = level - 1 };
+            }
+            if (new_controls.down and level < 3) {
+                super_state = .{ .level_select = level + 1 };
+            }
+        },
     }
 }
 
@@ -57,8 +82,12 @@ fn updateLevel(level: u8, new_controls: cart.Controls) void {
         super_state = .{ .level_title = level };
         return;
     }
+    if (new_controls.start) {
+        super_state = .main_menu;
+        return;
+    }
     if (new_controls.select) {
-        // Exit. TODO
+        super_state = .{ .level_select = level };
         return;
     }
     if (state.background_animation_start) |t0| {
@@ -66,8 +95,13 @@ fn updateLevel(level: u8, new_controls: cart.Controls) void {
         const now = cart.micros_since_boot();
         const t = (now - t0) / 10_000;
         if (t > 160 + 128 and new_controls.a) {
-            super_state = .{ .level_title = level + 1 };
-            updateWinCondition(level + 1);
+            if (level < 3) {
+                super_state = .{ .level_title = level + 1 };
+                updateWinCondition(level + 1);
+            } else {
+                super_state = .main_menu;
+                updateWinCondition(null);
+            }
         } else return;
     }
 
@@ -178,7 +212,11 @@ fn fillCross(output: *[10][8]Dot, x: usize, y: usize, value: Dot) void {
     if (y < 7) output[x][y + 1] = value;
 }
 
-fn updateWinCondition(level: u8) void {
+fn updateWinCondition(maybe_level: ?u8) void {
+    const level = maybe_level orelse {
+        for (cart.neopixels) |*neopixel| neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
+        return;
+    };
     var winning = false;
 
     switch (level) {
@@ -256,15 +294,39 @@ fn rgb256(r: u8, g: u8, b: u8) cart.DisplayColor {
 
 fn draw() void {
     switch (super_state) {
-        .main_menu => unreachable, // TODO
+        .main_menu => {
+            drawControls();
+            drawTextCentered("p is for", 10, 2, yellow);
+            drawTextCentered("puzzle", 35, 3, yellow);
+        },
         .level_title => |level| {
             drawLevelTitle(level);
         },
         .level => {
             drawLevel();
         },
-        .level_select => unreachable, // TODO
+        .level_select => |level| {
+            drawLevelSelect(level);
+        },
     }
+}
+
+fn drawControls() void {
+    cart.rect(.{ .x = 0, .y = 0, .width = 160, .height = 128, .fill_color = black });
+
+    cart.text(.{ .x = 20, .y = 69, .text_color = purple, .str = "\x80\xf7continue" });
+    cart.text(.{ .x = 20, .y = 79, .text_color = purple, .str = "\x81\xf7reset" });
+    cart.text(.{ .x = 20, .y = 89, .text_color = purple, .str = "\x82\xf7controls" });
+    cart.text(.{ .x = 20, .y = 99, .text_color = purple, .str = "\x83\xf7level select" });
+}
+
+fn drawLevelSelect(level: u8) void {
+    cart.rect(.{ .x = 0, .y = 0, .width = 160, .height = 128, .fill_color = black });
+    cart.text(.{ .x = 30, .y = 20, .text_color = white, .str = "Level 1" });
+    cart.text(.{ .x = 30, .y = 30, .text_color = white, .str = "Level 2" });
+    cart.text(.{ .x = 30, .y = 40, .text_color = white, .str = "Level 3" });
+
+    cart.rect(.{ .x = 21, .y = (level - 1) * 10 + 21, .width = 8, .height = 8, .fill_color = blue });
 }
 
 fn drawLevelTitle(level: u8) void {
