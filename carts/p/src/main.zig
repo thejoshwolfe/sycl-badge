@@ -296,8 +296,8 @@ fn draw() void {
     switch (super_state) {
         .main_menu => {
             drawControls();
-            drawTextCentered("p is for", 10, 2, yellow);
-            drawTextCentered("puzzle", 35, 3, yellow);
+            drawTextCentered("p is for", 10, 2, white);
+            drawTextCentered("puzzle", 35, 3, white);
         },
         .level_title => |level| {
             drawLevelTitle(level);
@@ -314,10 +314,10 @@ fn draw() void {
 fn drawControls() void {
     cart.rect(.{ .x = 0, .y = 0, .width = 160, .height = 128, .fill_color = black });
 
-    cart.text(.{ .x = 20, .y = 69, .text_color = purple, .str = "\x80\xf7continue" });
-    cart.text(.{ .x = 20, .y = 79, .text_color = purple, .str = "\x81\xf7reset" });
-    cart.text(.{ .x = 20, .y = 89, .text_color = purple, .str = "\x82\xf7controls" });
-    cart.text(.{ .x = 20, .y = 99, .text_color = purple, .str = "\x83\xf7level select" });
+    cart.text(.{ .x = 20, .y = 69, .text_color = yellow, .str = "\x80\xf7continue" });
+    cart.text(.{ .x = 20, .y = 79, .text_color = yellow, .str = "\x81\xf7reset" });
+    cart.text(.{ .x = 20, .y = 89, .text_color = yellow, .str = "\x82\xf7controls" });
+    cart.text(.{ .x = 20, .y = 99, .text_color = yellow, .str = "\x83\xf7level select" });
 }
 
 fn drawLevelSelect(level: u8) void {
@@ -342,18 +342,18 @@ fn drawLevelTitle(level: u8) void {
         else => unreachable,
         1 => {
             drawTextCentered("Level 1", 30, 2, white);
-            drawTextCentered("_\xbf\xf7. .\xbf\xf7_ \xaf\xbf\xf7_", 55, 1, blue);
-            drawTextCentered("_+.\xf7\xaf 5\xaf\xf7\xb6", 70, 1, blue);
+            drawTextCentered("_\xbf\xf7. .\xbf\xf7_ \xaf\xbf\xf7_", 55, 1, yellow);
+            drawTextCentered("_+.\xf7\xaf 5\xaf\xf7\xb6", 70, 1, yellow);
         },
         2 => {
             drawTextCentered("Level 2", 30, 2, white);
-            drawTextCentered("\xbf+_\xf7+. \xbb.\xf7\xbb\xaf", 55, 1, blue);
-            drawTextCentered("\xaf\xf7+\xaf 80\xaf\xf7\xb6", 70, 1, blue);
+            drawTextCentered("\xbf+_\xf7+. \xbb.\xf7\xbb\xaf", 55, 1, yellow);
+            drawTextCentered("\xaf\xf7+\xaf 80\xaf\xf7\xb6", 70, 1, yellow);
         },
         3 => {
             drawTextCentered("Level 3", 30, 2, white);
-            drawTextCentered("_\xbf\xf7. .\xbf\xf7_ \xaf\xbf\xf7_", 55, 1, blue);
-            drawTextCentered("_+.\xf7\xaf \xbf+\xaf\xf7\xb6", 70, 1, blue);
+            drawTextCentered("_\xbf\xf7. .\xbf\xf7_ \xaf\xbf\xf7_", 55, 1, yellow);
+            drawTextCentered("_+.\xf7\xaf \xbf+\xaf\xf7\xb6", 70, 1, yellow);
         },
     }
 }
@@ -363,6 +363,17 @@ fn drawTextCentered(str: []const u8, y: u8, scale: u3, color: cart.DisplayColor)
     const x = @as(u8, @intCast(160 / 2)) - @as(u8, @intCast(str_width / 2));
     cart.text(.{ .str = str, .x = x, .y = y, .scale = scale, .text_color = color });
 }
+
+const rainbow = [_]cart.DisplayColor{
+    .rgb(0x002288),
+    .rgb(0x2288aa),
+    .rgb(0x88aaee),
+    .rgb(0xaaeeaa),
+    .rgb(0xeeaa88),
+    .rgb(0xaa8822),
+    .rgb(0x882200),
+    .rgb(0x220022),
+};
 
 fn drawLevel() void {
     const now = cart.micros_since_boot();
@@ -391,12 +402,7 @@ fn drawLevel() void {
                 if (state.background_animation_start) |t0| {
                     const t = (now - t0) / 10_000;
                     if (t < x + y) break :blk black;
-                    const f: f32 = @floatFromInt((t - (x + y)) / 10);
-                    break :blk rgb256(
-                        0x80 + @as(u8, @intFromFloat(0x7f * sin(f))),
-                        0x80 + @as(u8, @intFromFloat(0x7f * sin(f + 1))),
-                        0x80 + @as(u8, @intFromFloat(0x7f * sin(f + 2))),
-                    );
+                    break :blk rainbow[@intCast(((t - (x + y)) >> 4) % rainbow.len)];
                 }
                 // Background
                 break :blk black;
