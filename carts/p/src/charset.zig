@@ -1,8 +1,50 @@
 //! The cart.text() font roughly corresponds to ISO/IEC 8859-1.
 //! https://en.wikipedia.org/wiki/ISO/IEC_8859-1#Code_page_layout
 //! Extensions are: "‥🅰🅱⊕⊖←→↑↓◆"
+//!
+//! The full charset is:
+//! ```
+//!    0123456789abcdef |
+//! 0:                  |
+//! 1:                  |
+//! 2:  !"#$%&'()*+,-./ |
+//! 3: 0123456789:;<=>? |
+//! 4: @ABCDEFGHIJKLMNO |
+//! 5: PQRSTUVWXYZ[\]^_ |
+//! 6: `abcdefghijklmno |
+//! 7: pqrstuvwxyz{|}~‥ |
+//! 8: 🅰🅱⊕⊖←→↑↓◆        |
+//! 9:                  |
+//! a:  ¡¢£¤¥¦§¨©ª«¬ ®¯ |
+//! b: °±²³´µ¶·¸¹º»¼½¾¿ |
+//! c: ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏ |
+//! d: ÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞß |
+//! e: àáâãäåæçèéêëìíîï |
+//! f: ðñòóôõö÷øùúûüýþÿ |
+//! ```
+//! See also ./charset.png for a rendering using ./font.zig.
+
 const Utf8View = @import("std").unicode.Utf8View;
 
+test fromUtf8 {
+    const testing = @import("std").testing;
+    try testing.expectEqualSlices(u8, "H\xe9llo", fromUtf8("Héllo"));
+    try testing.expectEqualSlices(u8, "Press \x82 to begin", fromUtf8("Press ⊕ to begin"));
+}
+
+/// Convert a string literal at comptime to the cart's charset.
+pub inline fn fromUtf8(comptime s: []const u8) []const u8 {
+    comptime {
+        var utf8 = (Utf8View.init(s) catch unreachable).iterator();
+        var result: []const u8 = "";
+        while (utf8.nextCodepoint()) |codepoint| {
+            result = result ++ .{fromCodepoint(codepoint)};
+        }
+        return result;
+    }
+}
+
+/// Convert a single Unicode codepoint to the cart's charset.
 pub fn fromCodepoint(c: u21) u8 {
     return switch (c) {
         else => unreachable, // unrepresentable codepoint
@@ -119,15 +161,4 @@ pub fn fromCodepoint(c: u21) u8 {
         'þ' => 0xfe,
         'ÿ' => 0xff,
     };
-}
-
-pub inline fn fromUtf8(comptime s: []const u8) []const u8 {
-    comptime {
-        var utf8 = (Utf8View.init(s) catch unreachable).iterator();
-        var result: []const u8 = "";
-        while (utf8.nextCodepoint()) |codepoint| {
-            result = result ++ .{fromCodepoint(codepoint)};
-        }
-        return result;
-    }
 }
