@@ -1,5 +1,8 @@
 const sin = @import("std").math.sin;
 const cart = @import("cart-api");
+
+const fromUtf8 = @import("./charset.zig").fromUtf8;
+
 comptime {
     cart.export_start_code();
 
@@ -68,7 +71,7 @@ pub fn update() void {
             if (new_controls.up and level > 1) {
                 super_state = .{ .level_select = level - 1 };
             }
-            if (new_controls.down and level < 3) {
+            if (new_controls.down and level < 4) {
                 super_state = .{ .level_select = level + 1 };
             }
         },
@@ -147,6 +150,9 @@ fn checkDots(level: u8) void {
                         fillCross(&output, x, y, .high);
                     }
                 },
+                4 => {
+                    // asdf
+                },
             }
         }
     }
@@ -178,6 +184,9 @@ fn checkDots(level: u8) void {
                     }
                 }
             }
+        },
+        4 => {
+            // asdf
         },
     }
 
@@ -271,6 +280,9 @@ fn updateWinCondition(maybe_level: ?u8) void {
                 for (cart.neopixels) |*neopixel| neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
             }
         },
+        4 => {
+            // asdf
+        },
     }
 
     if (winning) {
@@ -314,10 +326,10 @@ fn draw() void {
 fn drawControls() void {
     cart.rect(.{ .x = 0, .y = 0, .width = 160, .height = 128, .fill_color = black });
 
-    cart.text(.{ .x = 20, .y = 69, .text_color = yellow, .str = "\x80\xf7continue" });
-    cart.text(.{ .x = 20, .y = 79, .text_color = yellow, .str = "\x81\xf7reset" });
-    cart.text(.{ .x = 20, .y = 89, .text_color = yellow, .str = "\x82\xf7controls" });
-    cart.text(.{ .x = 20, .y = 99, .text_color = yellow, .str = "\x83\xf7level select" });
+    cart.text(.{ .x = 20, .y = 69, .text_color = yellow, .str = fromUtf8("🅰÷continue") });
+    cart.text(.{ .x = 20, .y = 79, .text_color = yellow, .str = fromUtf8("🅱÷reset") });
+    cart.text(.{ .x = 20, .y = 89, .text_color = yellow, .str = fromUtf8("⊕÷controls") });
+    cart.text(.{ .x = 20, .y = 99, .text_color = yellow, .str = fromUtf8("⊖÷level select") });
 }
 
 fn drawLevelSelect(level: u8) void {
@@ -325,6 +337,7 @@ fn drawLevelSelect(level: u8) void {
     cart.text(.{ .x = 30, .y = 20, .text_color = white, .str = "Level 1" });
     cart.text(.{ .x = 30, .y = 30, .text_color = white, .str = "Level 2" });
     cart.text(.{ .x = 30, .y = 40, .text_color = white, .str = "Level 3" });
+    cart.text(.{ .x = 30, .y = 50, .text_color = white, .str = "Level 4" });
 
     cart.rect(.{ .x = 21, .y = (level - 1) * 10 + 21, .width = 8, .height = 8, .fill_color = blue });
 }
@@ -333,27 +346,27 @@ fn drawLevelTitle(level: u8) void {
     cart.rect(.{ .x = 0, .y = 0, .width = 160, .height = 128, .fill_color = black });
     for (cart.neopixels) |*neopixel| neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
 
-    // ¿ \xbf
-    // ÷ \xf7
-    // ¯ \xaf
-    // ¶ \xb6
-    // » \xbb
     switch (level) {
         else => unreachable,
         1 => {
             drawTextCentered("Level 1", 30, 2, white);
-            drawTextCentered("_\xbf\xf7. .\xbf\xf7_ \xaf\xbf\xf7_", 55, 1, yellow);
-            drawTextCentered("_+.\xf7\xaf 5\xaf\xf7\xb6", 70, 1, yellow);
+            drawTextCentered(fromUtf8("_¿÷. .¿÷_ ¯¿÷_"), 55, 1, yellow);
+            drawTextCentered(fromUtf8("_+.÷¯ 5¯÷¶"), 70, 1, yellow);
         },
         2 => {
             drawTextCentered("Level 2", 30, 2, white);
-            drawTextCentered("\xbf+_\xf7+. \xbb.\xf7\xbb\xaf", 55, 1, yellow);
-            drawTextCentered("\xaf\xf7+\xaf 80\xaf\xf7\xb6", 70, 1, yellow);
+            drawTextCentered(fromUtf8("¿+_÷+. ».÷»¯"), 55, 1, yellow);
+            drawTextCentered(fromUtf8("¯÷+¯ 80¯÷¶"), 70, 1, yellow);
         },
         3 => {
             drawTextCentered("Level 3", 30, 2, white);
-            drawTextCentered("_\xbf\xf7. .\xbf\xf7_ \xaf\xbf\xf7_", 55, 1, yellow);
-            drawTextCentered("_+.\xf7\xaf \xbf+\xaf\xf7\xb6", 70, 1, yellow);
+            drawTextCentered(fromUtf8("_¿÷. .¿÷_ ¯¿÷_"), 55, 1, yellow);
+            drawTextCentered(fromUtf8("_+.÷¯ ¿+¯÷¶"), 70, 1, yellow);
+        },
+        4 => {
+            drawTextCentered("Level 4", 30, 2, white);
+            drawTextCentered(fromUtf8("_¿÷. ».÷»¯ ¯¿÷_"), 55, 1, yellow);
+            drawTextCentered(fromUtf8("¿+¯÷¶"), 70, 1, yellow);
         },
     }
 }
