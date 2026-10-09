@@ -348,7 +348,7 @@ fn drawLevelTitle(level: u8) void {
         2 => {
             drawTextCentered("Level 2", 30, 2, white);
             drawTextCentered("\xbf+_\xf7+. \xbb.\xf7\xbb\xaf", 55, 1, blue);
-            drawTextCentered("80\xaf\xf7\xb6", 70, 1, blue);
+            drawTextCentered("\xaf\xf7+\xaf 80\xaf\xf7\xb6", 70, 1, blue);
         },
         3 => {
             drawTextCentered("Level 3", 30, 2, white);
