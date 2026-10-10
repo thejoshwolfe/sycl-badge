@@ -14,7 +14,7 @@ pub fn start() void {
     draw();
 }
 
-const Dot = enum { off, mid, high };
+const Dot = enum { low, mid, high };
 
 var last_controls: cart.Controls = @fromBackingInt(0xffff);
 var super_state: union(enum) {
@@ -25,7 +25,7 @@ var super_state: union(enum) {
 } = .main_menu;
 var state: struct {
     pos: packed struct(u16) { x: u8, y: u8 } = .{ .x = 0, .y = 0 },
-    dots: [10][8]Dot = @splat(@splat(.off)),
+    dots: [10][8]Dot = @splat(@splat(.low)),
     zap_animation: ?struct { x: u8, y: u8, ttl: u64 } = null,
     background_animation_start: ?u64 = null,
 } = .{};
@@ -138,44 +138,44 @@ const Level = struct {
 const levels = [_]Level{
     .{
         .title = "Level 1",
-        .title_line1 = fromUtf8("_¿÷. .¿÷_ ¯¿÷_"),
-        .title_line2 = fromUtf8("_+.÷¯ 5¯÷¶"),
-        .phase1_fns = &.{ @"_¿÷.", @".¿÷_", @"¯¿÷_" },
-        .phase2_fns = &.{@"_+.÷¯"},
-        .check_win_fn = @"5¯÷¶",
+        .title_line1 = fromUtf8("_¿%. .¿%_ ¯¿%_"),
+        .title_line2 = fromUtf8("_+.%¯ 5¯%¶"),
+        .phase1_fns = &.{ @"_¿%.", @".¿%_", @"¯¿%_" },
+        .phase2_fns = &.{@"_+.%¯"},
+        .check_win_fn = @"5¯%¶",
     },
     .{
         .title = "Level 2",
-        .title_line1 = fromUtf8("¿+_÷+. ¯÷+¯"),
-        .title_line2 = fromUtf8("».÷»¯ 80¯÷¶"),
-        .phase1_fns = &.{ @"¿+_÷+.", @"¯÷+¯" },
-        .phase2_fns = &.{@"».÷»¯"},
-        .check_win_fn = @"80¯÷¶",
+        .title_line1 = fromUtf8("¿+_%+. ¯%+¯"),
+        .title_line2 = fromUtf8("».%»¯ 80¯%¶"),
+        .phase1_fns = &.{ @"¿+_%+.", @"¯%+¯" },
+        .phase2_fns = &.{@"».%»¯"},
+        .check_win_fn = @"80¯%¶",
     },
     .{
         .title = "Level 3",
-        .title_line1 = fromUtf8("_¿÷. .¿÷_ ¯¿÷_"),
-        .title_line2 = fromUtf8("_+.÷¯ ¿+¯÷¶"),
-        .phase1_fns = &.{ @"_¿÷.", @".¿÷_", @"¯¿÷_" },
-        .phase2_fns = &.{@"_+.÷¯"},
-        .check_win_fn = @"¿+¯÷¶",
+        .title_line1 = fromUtf8("_¿%. .¿%_ ¯¿%_"),
+        .title_line2 = fromUtf8("_+.%¯ ¿+¯%¶"),
+        .phase1_fns = &.{ @"_¿%.", @".¿%_", @"¯¿%_" },
+        .phase2_fns = &.{@"_+.%¯"},
+        .check_win_fn = @"¿+¯%¶",
     },
     .{
         .title = "Level 4",
-        .title_line1 = fromUtf8("_¿÷. ¯¿÷_"),
-        .title_line2 = fromUtf8("».÷»¯ 10.5¯÷¶"),
-        .phase1_fns = &.{ @"_¿÷.", @"¯¿÷_" },
-        .phase2_fns = &.{@"».÷»¯"},
-        .check_win_fn = @"10.5¯÷¶",
+        .title_line1 = fromUtf8("_¿%. ¯¿%_"),
+        .title_line2 = fromUtf8("».%»¯ 10.5¯%¶"),
+        .phase1_fns = &.{ @"_¿%.", @"¯¿%_" },
+        .phase2_fns = &.{@"».%»¯"},
+        .check_win_fn = @"10.5¯%¶",
     },
     .{
         .title = "Level 5",
-        .title_line1 = fromUtf8("¿+_÷.+. ¯¿🅰÷»¯"),
-        .title_line2 = fromUtf8("_+.÷¯ 40¯÷¶"),
-        .phase1_fns = &.{@"¿+_÷.+."},
-        .phase2_fns = &.{@"_+.÷¯"},
-        .a_press_fns = &.{@"¯¿🅰÷»¯"},
-        .check_win_fn = @"40¯÷¶",
+        .title_line1 = fromUtf8("¿+_%.+. ¯¿🅰%»¯"),
+        .title_line2 = fromUtf8("_+.%¯ 40¯%¶"),
+        .phase1_fns = &.{@"¿+_%.+."},
+        .phase2_fns = &.{@"_+.%¯"},
+        .a_press_fns = &.{@"¯¿🅰%»¯"},
+        .check_win_fn = @"40¯%¶",
     },
 };
 
@@ -221,34 +221,34 @@ fn checkDots(level: u8, from_which_input: enum { movement, a_press }) void {
     }
 }
 
-fn @"_¿÷."(output: *[10][8]Dot) void {
+fn @"_¿%."(output: *[10][8]Dot) void {
     const x = state.pos.x;
     const y = state.pos.y;
-    if (state.dots[x][y] == .off) {
+    if (state.dots[x][y] == .low) {
         output[x][y] = .mid;
     }
 }
 
-fn @".¿÷_"(output: *[10][8]Dot) void {
+fn @".¿%_"(output: *[10][8]Dot) void {
     const x = state.pos.x;
     const y = state.pos.y;
     if (state.dots[x][y] == .mid) {
-        output[x][y] = .off;
+        output[x][y] = .low;
     }
 }
 
-fn @"¯¿÷_"(output: *[10][8]Dot) void {
+fn @"¯¿%_"(output: *[10][8]Dot) void {
     const x = state.pos.x;
     const y = state.pos.y;
     if (state.dots[x][y] == .high) {
-        output[x][y] = .off;
+        output[x][y] = .low;
     }
 }
 
-fn @"_+.÷¯"(output: *[10][8]Dot) void {
+fn @"_+.%¯"(output: *[10][8]Dot) void {
     for (1..9) |x| {
         for (1..7) |y| {
-            if (state.dots[x][y] == .off and isCross(x, y, .mid)) {
+            if (state.dots[x][y] == .low and isCross(x, y, .mid)) {
                 output[x][y] = .high;
                 state.zap_animation = .{
                     .x = @intCast(x),
@@ -260,7 +260,7 @@ fn @"_+.÷¯"(output: *[10][8]Dot) void {
     }
 }
 
-fn @"5¯÷¶"() u8 {
+fn @"5¯%¶"() u8 {
     var high_count: u8 = 0;
     for (0..10) |x| {
         for (0..8) |y| {
@@ -272,15 +272,15 @@ fn @"5¯÷¶"() u8 {
     return @min(5, high_count);
 }
 
-fn @"¿+_÷+."(output: *[10][8]Dot) void {
+fn @"¿+_%+."(output: *[10][8]Dot) void {
     const x = state.pos.x;
     const y = state.pos.y;
-    if (isCross(x, y, .off)) {
+    if (isCross(x, y, .low)) {
         fillCross(output, x, y, .mid);
     }
 }
 
-fn @"».÷»¯"(output: *[10][8]Dot) void {
+fn @"».%»¯"(output: *[10][8]Dot) void {
     for (0..8) |y| {
         if (isRow(y, .mid)) {
             fillRow(output, y, .high);
@@ -288,7 +288,7 @@ fn @"».÷»¯"(output: *[10][8]Dot) void {
     }
 }
 
-fn @"¯÷+¯"(output: *[10][8]Dot) void {
+fn @"¯%+¯"(output: *[10][8]Dot) void {
     for (0..10) |x| {
         for (0..8) |y| {
             if (state.dots[x][y] == .high) {
@@ -298,7 +298,7 @@ fn @"¯÷+¯"(output: *[10][8]Dot) void {
     }
 }
 
-fn @"80¯÷¶"() u8 {
+fn @"80¯%¶"() u8 {
     var high_count: u8 = 0;
     for (0..10) |x| {
         for (0..8) |y| {
@@ -310,7 +310,7 @@ fn @"80¯÷¶"() u8 {
     return @min(5, high_count >> 4);
 }
 
-fn @"¿+¯÷¶"() u8 {
+fn @"¿+¯%¶"() u8 {
     if (isCross(state.pos.x, state.pos.y, .high)) {
         return 5;
     } else {
@@ -318,7 +318,7 @@ fn @"¿+¯÷¶"() u8 {
     }
 }
 
-fn @"10.5¯÷¶"() u8 {
+fn @"10.5¯%¶"() u8 {
     var mid_count: u8 = 0;
     var high_count: u8 = 0;
     for (0..10) |x| {
@@ -338,16 +338,16 @@ fn @"10.5¯÷¶"() u8 {
     }
 }
 
-fn @"¿+_÷.+."(output: *[10][8]Dot) void {
+fn @"¿+_%.+."(output: *[10][8]Dot) void {
     const x = state.pos.x;
     const y = state.pos.y;
-    if (isCross(x, y, .off)) {
+    if (isCross(x, y, .low)) {
         output[x][y] = .mid;
         fillCross(output, x, y, .mid);
     }
 }
 
-fn @"¯¿🅰÷»¯"(output: *[10][8]Dot) void {
+fn @"¯¿🅰%»¯"(output: *[10][8]Dot) void {
     const x = state.pos.x;
     const y = state.pos.y;
     if (state.dots[x][y] != .high) return;
@@ -355,7 +355,7 @@ fn @"¯¿🅰÷»¯"(output: *[10][8]Dot) void {
     fillRow(output, y, .high);
 }
 
-fn @"40¯÷¶"() u8 {
+fn @"40¯%¶"() u8 {
     var high_count: u8 = 0;
     for (0..10) |x| {
         for (0..8) |y| {
@@ -435,10 +435,10 @@ fn draw() void {
 fn drawControls() void {
     cart.rect(.{ .x = 0, .y = 0, .width = 160, .height = 128, .fill_color = black });
 
-    cart.text(.{ .x = 20, .y = 69, .text_color = yellow, .str = fromUtf8("🅰÷continue") });
-    cart.text(.{ .x = 20, .y = 79, .text_color = yellow, .str = fromUtf8("🅱÷reset") });
-    cart.text(.{ .x = 20, .y = 89, .text_color = yellow, .str = fromUtf8("⊕÷controls") });
-    cart.text(.{ .x = 20, .y = 99, .text_color = yellow, .str = fromUtf8("⊖÷level select") });
+    cart.text(.{ .x = 20, .y = 69, .text_color = yellow, .str = fromUtf8("🅰%continue") });
+    cart.text(.{ .x = 20, .y = 79, .text_color = yellow, .str = fromUtf8("🅱%reset") });
+    cart.text(.{ .x = 20, .y = 89, .text_color = yellow, .str = fromUtf8("⊕%controls") });
+    cart.text(.{ .x = 20, .y = 99, .text_color = yellow, .str = fromUtf8("⊖%level select") });
 }
 
 fn drawLevelSelect(level: u8) void {
@@ -487,7 +487,7 @@ fn drawLevel() void {
                 if ((x + 1) % 16 <= 1 or (y + 1) % 16 <= 1) break :blk yellow;
                 // Center dots
                 if ((x + 10) % 16 < 4 and (y + 10) % 16 < 4) break :blk switch (state.dots[x >> 4][y >> 4]) {
-                    .off => black,
+                    .low => black,
                     .mid => yellow,
                     .high => purple,
                 };
