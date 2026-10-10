@@ -170,21 +170,21 @@ const levels = [_]Level{
     },
     .{
         .title = "Level 5",
-        .title_line1 = fromUtf8("¿+_%.+. ¯¿🅰%»¯"),
-        .title_line2 = fromUtf8("_+.%¯ 40¯%¶"),
-        .phase1_fns = &.{@"¿+_%.+."},
-        .phase2_fns = &.{@"_+.%¯"},
-        .a_press_fns = &.{@"¯¿🅰%»¯"},
-        .check_win_fn = @"40¯%¶",
-    },
-    .{
-        .title = "Level 6",
         .title_line1 = fromUtf8("_¿%. ¯¿%_"),
         .title_line2 = fromUtf8("».¿🅰%+^ 5/%¶"),
         .phase1_fns = &.{ @"_¿%.", @"¯¿%_" },
         .phase2_fns = &.{},
         .a_press_fns = &.{@"».¿🅰%+^"},
         .check_win_fn = @"5/%¶",
+    },
+    .{
+        .title = "Level 6",
+        .title_line1 = fromUtf8("¿+_%.+. ¯¿🅰%»¯"),
+        .title_line2 = fromUtf8("_+.%¯ 40¯%¶"),
+        .phase1_fns = &.{@"¿+_%.+."},
+        .phase2_fns = &.{@"_+.%¯"},
+        .a_press_fns = &.{@"¯¿🅰%»¯"},
+        .check_win_fn = @"40¯%¶",
     },
 };
 
