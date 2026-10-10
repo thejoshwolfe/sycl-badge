@@ -1,3 +1,10 @@
+//!
+//! SPOILER WARNING
+//!
+//! You are reading the source code for a puzzle game.
+//! The intended way to solve puzzles is by playing the game normally.
+//! But it's open source, so spoil yourself if you'd like!
+
 const sin = @import("std").math.sin;
 const cart = @import("cart-api");
 
