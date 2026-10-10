@@ -71,7 +71,7 @@ pub fn update() void {
             if (new_controls.up and level > 1) {
                 super_state = .{ .level_select = level - 1 };
             }
-            if (new_controls.down and level < 4) {
+            if (new_controls.down and level <= levels.len) {
                 super_state = .{ .level_select = level + 1 };
             }
         },
@@ -98,12 +98,11 @@ fn updateLevel(level: u8, new_controls: cart.Controls) void {
         const now = cart.micros_since_boot();
         const t = (now - t0) / 10_000;
         if (t > 160 + 128 and new_controls.a) {
+            clearNeopixels();
             if (level < 3) {
                 super_state = .{ .level_title = level + 1 };
-                updateWinCondition(level + 1);
             } else {
                 super_state = .main_menu;
-                updateWinCondition(null);
             }
         } else return;
     }
@@ -124,79 +123,170 @@ fn beginLevel(level: u8) void {
     checkDots(level);
 }
 
+const Level = struct {
+    title: []const u8,
+    title_line1: []const u8 = "",
+    title_line2: []const u8 = "",
+    phase1_fns: []const *const fn (*[10][8]Dot) void = &.{},
+    phase2_fns: []const *const fn (*[10][8]Dot) void = &.{},
+    check_win_fn: *const fn () u8,
+};
+const levels = [_]Level{
+    .{
+        .title = "Level 1",
+        .title_line1 = fromUtf8("_¿÷. .¿÷_ ¯¿÷_"),
+        .title_line2 = fromUtf8("_+.÷¯ 5¯÷¶"),
+        .phase1_fns = &.{ @"_¿÷.", @".¿÷_", @"¯¿÷_" },
+        .phase2_fns = &.{@"_+.÷¯"},
+        .check_win_fn = @"5¯÷¶",
+    },
+    .{
+        .title = "Level 2",
+        .title_line1 = fromUtf8("¿+_÷+. ¯÷+¯"),
+        .title_line2 = fromUtf8("».÷»¯ 80¯÷¶"),
+        .phase1_fns = &.{ @"¿+_÷+.", @"¯÷+¯" },
+        .phase2_fns = &.{@"».÷»¯"},
+        .check_win_fn = @"80¯÷¶",
+    },
+    .{
+        .title = "Level 3",
+        .title_line1 = fromUtf8("_¿÷. .¿÷_ ¯¿÷_"),
+        .title_line2 = fromUtf8("_+.÷¯ ¿+¯÷¶"),
+        .phase1_fns = &.{ @"_¿÷.", @".¿÷_", @"¯¿÷_" },
+        .phase2_fns = &.{@"_+.÷¯"},
+        .check_win_fn = @"¿+¯÷¶",
+    },
+};
+
+fn drawLevelTitle(level: u8) void {
+    cart.rect(.{ .x = 0, .y = 0, .width = 160, .height = 128, .fill_color = black });
+    clearNeopixels();
+    drawTextCentered(levels[level - 1].title, 30, 2, white);
+    drawTextCentered(levels[level - 1].title_line1, 55, 1, yellow);
+    drawTextCentered(levels[level - 1].title_line2, 70, 1, yellow);
+}
+
 fn checkDots(level: u8) void {
     var output = state.dots;
+    for (levels[level - 1].phase1_fns) |f| {
+        f(&output);
+    }
+    state.dots = output;
+    for (levels[level - 1].phase2_fns) |f| {
+        f(&output);
+    }
+    state.dots = output;
 
-    // Per-cell checks.
-    for (0..10) |x| {
-        for (0..8) |y| {
-            switch (level) {
-                else => unreachable,
-                1, 3 => {
-                    if (isCursorAt(x, y)) {
-                        output[x][y] = switch (state.dots[x][y]) {
-                            .off => .mid,
-                            .mid, .high => .off,
-                        };
-                    }
-                },
-                2 => {
-                    // ¿+_÷+.
-                    if (isCursorAt(x, y) and isCross(x, y, .off)) {
-                        fillCross(&output, x, y, .mid);
-                    }
-                    // ¯÷+¯
-                    if (state.dots[x][y] == .high) {
-                        fillCross(&output, x, y, .high);
-                    }
-                },
-                4 => {
-                    // asdf
-                },
+    const pixel_count = levels[level - 1].check_win_fn();
+    for (cart.neopixels, 0..) |*neopixel, i| {
+        if (i < pixel_count) {
+            neopixel.* = .{ .r = 0xff, .g = 0x0, .b = 0xff };
+        } else {
+            neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
+        }
+    }
+    if (pixel_count == 5) {
+        state.background_animation_start = cart.micros_since_boot();
+    }
+}
+
+fn @"_¿÷."(output: *[10][8]Dot) void {
+    const x = state.pos.x;
+    const y = state.pos.y;
+    if (state.dots[x][y] == .off) {
+        output[x][y] = .mid;
+    }
+}
+
+fn @".¿÷_"(output: *[10][8]Dot) void {
+    const x = state.pos.x;
+    const y = state.pos.y;
+    if (state.dots[x][y] == .mid) {
+        output[x][y] = .off;
+    }
+}
+
+fn @"¯¿÷_"(output: *[10][8]Dot) void {
+    const x = state.pos.x;
+    const y = state.pos.y;
+    if (state.dots[x][y] == .high) {
+        output[x][y] = .off;
+    }
+}
+
+fn @"_+.÷¯"(output: *[10][8]Dot) void {
+    for (1..9) |x| {
+        for (1..7) |y| {
+            if (state.dots[x][y] == .off and isCross(x, y, .mid)) {
+                output[x][y] = .high;
+                state.zap_animation = .{
+                    .x = @intCast(x),
+                    .y = @intCast(y),
+                    .ttl = cart.micros_since_boot() + 200_000,
+                };
             }
         }
     }
-    state.dots = output;
-
-    // Large checks.
-    switch (level) {
-        else => unreachable,
-        1, 3 => {
-            for (0..10) |x| {
-                for (0..8) |y| {
-                    if (state.dots[x][y] == .off and isCross(x, y, .mid)) {
-                        output[x][y] = .high;
-                        state.zap_animation = .{
-                            .x = @intCast(x),
-                            .y = @intCast(y),
-                            .ttl = cart.micros_since_boot() + 200_000,
-                        };
-                    }
-                }
-            }
-        },
-        2 => {
-            // ».÷»¯
-            for (0..8) |y| {
-                if (isRow(y, .mid)) {
-                    for (0..10) |x| {
-                        output[x][y] = .high;
-                    }
-                }
-            }
-        },
-        4 => {
-            // asdf
-        },
-    }
-
-    state.dots = output;
-
-    updateWinCondition(level);
 }
 
-fn isCursorAt(x: usize, y: usize) bool {
-    return state.pos.x == x and state.pos.y == y;
+fn @"5¯÷¶"() u8 {
+    var high_count: u16 = 0;
+    for (0..10) |x| {
+        for (0..8) |y| {
+            if (state.dots[x][y] == .high) {
+                high_count += 1;
+            }
+        }
+    }
+    return @min(5, high_count);
+}
+
+fn @"¿+_÷+."(output: *[10][8]Dot) void {
+    const x = state.pos.x;
+    const y = state.pos.y;
+    if (isCross(x, y, .off)) {
+        fillCross(output, x, y, .mid);
+    }
+}
+
+fn @"».÷»¯"(output: *[10][8]Dot) void {
+    for (0..8) |y| {
+        if (isRow(y, .mid)) {
+            for (0..10) |x| {
+                output[x][y] = .high;
+            }
+        }
+    }
+}
+
+fn @"¯÷+¯"(output: *[10][8]Dot) void {
+    for (0..10) |x| {
+        for (0..8) |y| {
+            if (state.dots[x][y] == .high) {
+                fillCross(output, x, y, .high);
+            }
+        }
+    }
+}
+
+fn @"80¯÷¶"() u8 {
+    var high_count: u16 = 0;
+    for (0..10) |x| {
+        for (0..8) |y| {
+            if (state.dots[x][y] == .high) {
+                high_count += 1;
+            }
+        }
+    }
+    return @min(5, high_count >> 4);
+}
+
+fn @"¿+¯÷¶"() u8 {
+    if (isCross(state.pos.x, state.pos.y, .high)) {
+        return 5;
+    } else {
+        return 0;
+    }
 }
 
 fn isCross(x: usize, y: usize, value: Dot) bool {
@@ -221,73 +311,8 @@ fn fillCross(output: *[10][8]Dot, x: usize, y: usize, value: Dot) void {
     if (y < 7) output[x][y + 1] = value;
 }
 
-fn updateWinCondition(maybe_level: ?u8) void {
-    const level = maybe_level orelse {
-        for (cart.neopixels) |*neopixel| neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
-        return;
-    };
-    var winning = false;
-
-    switch (level) {
-        else => unreachable,
-        1 => {
-            var high_count: u16 = 0;
-            for (0..10) |x| {
-                for (0..8) |y| {
-                    if (state.dots[x][y] == .high) {
-                        high_count += 1;
-                    }
-                }
-            }
-            for (cart.neopixels, 0..) |*neopixel, i| {
-                if (i < high_count) {
-                    neopixel.* = .{ .r = 0xff, .g = 0x0, .b = 0xff };
-                } else {
-                    neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
-                }
-            }
-            if (high_count >= 5) {
-                winning = true;
-            }
-        },
-        2 => {
-            // 80¯÷¶
-            var high_count: u16 = 0;
-            for (0..10) |x| {
-                for (0..8) |y| {
-                    if (state.dots[x][y] == .high) {
-                        high_count += 1;
-                    }
-                }
-            }
-            for (cart.neopixels, 0..) |*neopixel, i| {
-                if (i < high_count / 16) {
-                    neopixel.* = .{ .r = 0xff, .g = 0x0, .b = 0xff };
-                } else {
-                    neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
-                }
-            }
-            if (high_count >= 80) {
-                winning = true;
-            }
-        },
-        3 => {
-            // ¿+¯÷¶
-            if (isCross(state.pos.x, state.pos.y, .high)) {
-                for (cart.neopixels) |*neopixel| neopixel.* = .{ .r = 0xff, .g = 0x0, .b = 0xff };
-                winning = true;
-            } else {
-                for (cart.neopixels) |*neopixel| neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
-            }
-        },
-        4 => {
-            // asdf
-        },
-    }
-
-    if (winning) {
-        state.background_animation_start = cart.micros_since_boot();
-    }
+fn clearNeopixels() void {
+    for (cart.neopixels) |*neopixel| neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
 }
 
 const black = rgb256(0, 0, 0);
@@ -334,41 +359,11 @@ fn drawControls() void {
 
 fn drawLevelSelect(level: u8) void {
     cart.rect(.{ .x = 0, .y = 0, .width = 160, .height = 128, .fill_color = black });
-    cart.text(.{ .x = 30, .y = 20, .text_color = white, .str = "Level 1" });
-    cart.text(.{ .x = 30, .y = 30, .text_color = white, .str = "Level 2" });
-    cart.text(.{ .x = 30, .y = 40, .text_color = white, .str = "Level 3" });
-    cart.text(.{ .x = 30, .y = 50, .text_color = white, .str = "Level 4" });
+    for (levels, 0..) |level_defs, i| {
+        cart.text(.{ .x = 30, .y = @intCast(20 + i * 10), .text_color = white, .str = level_defs.title });
+    }
 
     cart.rect(.{ .x = 21, .y = (level - 1) * 10 + 21, .width = 8, .height = 8, .fill_color = blue });
-}
-
-fn drawLevelTitle(level: u8) void {
-    cart.rect(.{ .x = 0, .y = 0, .width = 160, .height = 128, .fill_color = black });
-    for (cart.neopixels) |*neopixel| neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
-
-    switch (level) {
-        else => unreachable,
-        1 => {
-            drawTextCentered("Level 1", 30, 2, white);
-            drawTextCentered(fromUtf8("_¿÷. .¿÷_ ¯¿÷_"), 55, 1, yellow);
-            drawTextCentered(fromUtf8("_+.÷¯ 5¯÷¶"), 70, 1, yellow);
-        },
-        2 => {
-            drawTextCentered("Level 2", 30, 2, white);
-            drawTextCentered(fromUtf8("¿+_÷+. ».÷»¯"), 55, 1, yellow);
-            drawTextCentered(fromUtf8("¯÷+¯ 80¯÷¶"), 70, 1, yellow);
-        },
-        3 => {
-            drawTextCentered("Level 3", 30, 2, white);
-            drawTextCentered(fromUtf8("_¿÷. .¿÷_ ¯¿÷_"), 55, 1, yellow);
-            drawTextCentered(fromUtf8("_+.÷¯ ¿+¯÷¶"), 70, 1, yellow);
-        },
-        4 => {
-            drawTextCentered("Level 4", 30, 2, white);
-            drawTextCentered(fromUtf8("_¿÷. ».÷»¯ ¯¿÷_"), 55, 1, yellow);
-            drawTextCentered(fromUtf8("¿+¯÷¶"), 70, 1, yellow);
-        },
-    }
 }
 
 fn drawTextCentered(str: []const u8, y: u8, scale: u3, color: cart.DisplayColor) void {
