@@ -22,6 +22,7 @@ var super_state: union(enum) {
     level_title: u8,
     level: u8,
     level_select: u8,
+    end_credits,
 } = .main_menu;
 var state: struct {
     pos: packed struct(u16) { x: u8, y: u8 } = .{ .x = 0, .y = 0 },
@@ -75,11 +76,28 @@ pub fn update() void {
                 super_state = .main_menu;
             }
             if (new_controls.up) {
-                super_state = .{ .level_select = if (level == 1) levels.len else level - 1 };
+                super_state = .{ .level_select = switch (level) {
+                    1 => 8,
+                    9 => 1,
+                    else => level - 1,
+                } };
             }
             if (new_controls.down) {
-                super_state = .{ .level_select = if (level == levels.len) 1 else level + 1 };
+                super_state = .{ .level_select = switch (level) {
+                    8 => 1,
+                    9 => 8,
+                    else => level + 1,
+                } };
             }
+            if (level == 4 and new_controls.right) {
+                super_state = .{ .level_select = 9 };
+            }
+            if (level == 9 and new_controls.left) {
+                super_state = .{ .level_select = 4 };
+            }
+        },
+        .end_credits => {
+            // Jail.
         },
     }
 }
@@ -148,6 +166,7 @@ const Level = struct {
     a_press_fns: []const *const fn (*[10][8]Dot) void = &.{},
     b_press_fns: []const *const fn () bool = &.{},
     check_win_fn: *const fn () u8,
+    check_secret_fns: []const *const fn () void = &.{},
 };
 const levels = [_]Level{
     .{
@@ -157,6 +176,7 @@ const levels = [_]Level{
         .phase1_fns = &.{ @"_¿%.", @".¿%_", @"¯¿%_" },
         .phase2_fns = &.{@"_+.%¯"},
         .check_win_fn = @"5¯%¶",
+        .check_secret_fns = &.{@"1£8¯"},
     },
     .{
         .title = "Level 2",
@@ -173,6 +193,7 @@ const levels = [_]Level{
         .phase1_fns = &.{ @"_¿%.", @".¿%_", @"¯¿%_" },
         .phase2_fns = &.{@"_+.%¯"},
         .check_win_fn = @"¿+¯%¶",
+        .check_secret_fns = &.{@"3£¿×¯"},
     },
     .{
         .title = "Level 4",
@@ -190,6 +211,7 @@ const levels = [_]Level{
         .phase2_fns = &.{},
         .a_press_fns = &.{@"».¿🅰%+^"},
         .check_win_fn = @"5/%¶",
+        .check_secret_fns = &.{@"5£¿×/"},
     },
     .{
         .title = "Level 6",
@@ -225,7 +247,7 @@ const levels = [_]Level{
         .phase1_fns = &.{@"1£8¯%×/ 3£¿×¯%»/ 5£¿×/%×/"},
         .phase2_fns = &.{},
         .b_press_fns = &.{@"¿+/🅱%¶"},
-        .check_win_fn = @"5/%¶",
+        .check_win_fn = @"¿+¯%¶",
     },
 };
 
@@ -265,6 +287,10 @@ fn checkDots(level: u8, from_which_input: enum { movement, a_press, b_press }) b
         },
     }
 
+    for (levels[level - 1].check_secret_fns) |f| {
+        f();
+    }
+
     const pixel_count = levels[level - 1].check_win_fn();
     for (cart.neopixels, 0..) |*neopixel, i| {
         if (i < pixel_count) {
@@ -275,6 +301,7 @@ fn checkDots(level: u8, from_which_input: enum { movement, a_press, b_press }) b
     }
     if (pixel_count == 5) {
         state.background_animation_start = cart.micros_since_boot();
+        completion_state.levels_completed[level - 1] = true;
     }
 
     return b_press_handled;
@@ -506,13 +533,43 @@ fn @"54_».¿×.🅰%+^"(output: *[10][8]Dot) void {
     incrementCross(output, x, y);
 }
 
+fn @"1£8¯"() void {
+    var high_count: u8 = 0;
+    for (0..10) |x| {
+        for (0..8) |y| {
+            if (state.dots[x][y] == .high) {
+                high_count += 1;
+            }
+        }
+    }
+    if (high_count >= 8) {
+        completion_state.level_1_secret = true;
+    }
+}
+
+fn @"3£¿×¯"() void {
+    if (isDiagonal(state.pos.x, state.pos.y, .high)) {
+        completion_state.level_3_secret = true;
+    }
+}
+
+fn @"5£¿×/"() void {
+    if (isDiagonal(state.pos.x, state.pos.y, .super)) {
+        completion_state.level_5_secret = true;
+    }
+}
+
 fn @"1£8¯%×/ 3£¿×¯%»/ 5£¿×/%×/"(output: *[10][8]Dot) void {
-    if (completion_state.level_1_secret) fillCross(output, 0, 0, .super);
+    if (completion_state.level_1_secret) fillDiagonal(output, 0, 0, .super);
     if (completion_state.level_3_secret) fillRow(output, 2, .super);
-    if (completion_state.level_5_secret) fillCross(output, 0, 4, .super);
+    if (completion_state.level_5_secret) fillDiagonal(output, 0, 4, .super);
 }
 
 fn @"¿+/🅱%¶"() bool {
+    if (isCross(state.pos.x, state.pos.y, .super)) {
+        super_state = .end_credits;
+        return true;
+    }
     return false;
 }
 
@@ -557,6 +614,13 @@ fn isDiagonal(x: usize, y: usize, value: Dot) bool {
         state.dots[x + 1][y - 1] == value and
         state.dots[x + 1][y + 1] == value and
         state.dots[x - 1][y + 1] == value);
+}
+
+fn fillDiagonal(output: *[10][8]Dot, x: usize, y: usize, value: Dot) void {
+    if (x > 0 and y > 0) output[x - 1][y - 1] = value;
+    if (x < 9 and y > 0) output[x + 1][y - 1] = value;
+    if (x < 9 and y < 7) output[x + 1][y + 1] = value;
+    if (x > 0 and y < 7) output[x - 1][y + 1] = value;
 }
 
 fn incrementDiagonal(output: *[10][8]Dot, x: usize, y: usize) void {
@@ -610,6 +674,9 @@ fn draw() void {
         .level_select => |level| {
             drawLevelSelect(level);
         },
+        .end_credits => {
+            drawEndCredits();
+        },
     }
 }
 
@@ -622,23 +689,57 @@ fn drawControls() void {
     cart.text(.{ .x = 20, .y = 99, .text_color = yellow, .str = fromUtf8("⊖%level select") });
 }
 
+fn drawEndCredits() void {
+    const t: u8 = @intCast((cart.micros_since_boot() / 100_000) % rainbow.len);
+    for (cart.neopixels, 0..) |*neopixel, i| {
+        const color = rainbow[((5 - i) + t) % rainbow.len];
+        neopixel.* = .{
+            .r = color.r << 2,
+            .g = color.g << 2,
+            .b = color.b << 2,
+        };
+    }
+
+    cart.rect(.{ .x = 0, .y = 0, .width = 160, .height = 128, .fill_color = black });
+    drawTextCentered("The End", 10, 2, white);
+    drawTextCentered("thanks for playing", 40, 1, yellow);
+    drawTextCentered("my puzzle game!", 50, 1, yellow);
+    drawTextCentered("  - Josh Wolfe", 70, 1, yellow);
+    drawTextCentered("     SYLC 2026", 80, 1, yellow);
+}
+
 fn drawLevelSelect(level: u8) void {
     cart.rect(.{ .x = 0, .y = 0, .width = 160, .height = 128, .fill_color = black });
     // Titles
     for (levels[0..8], 0..) |level_defs, i| {
-        cart.text(.{ .x = 30, .y = @intCast(20 + i * 10), .text_color = white, .str = level_defs.title });
+        cart.text(.{ .x = 20, .y = @intCast(20 + i * 10), .text_color = white, .str = level_defs.title });
+    }
+    if (level == 9) {
+        cart.text(.{ .x = 90, .y = 20 + 3 * 10, .text_color = white, .str = levels[9 - 1].title });
     }
 
     // Completion dots
     for (0..8) |i| {
-        // TODO: backwards
-        if (!completion_state.levels_completed[i]) {
-            cart.rect(.{ .x = 23, .y = @as(i32, @intCast(i)) * 10 + 22, .width = 4, .height = 4, .fill_color = purple });
+        if (completion_state.levels_completed[i]) {
+            cart.rect(.{ .x = 13, .y = @as(i32, @intCast(i)) * 10 + 22, .width = 4, .height = 4, .fill_color = purple });
         }
+    }
+    if (completion_state.level_1_secret) {
+        cart.rect(.{ .x = 12, .y = 0 * 10 + 21, .width = 5, .height = 5, .fill_color = white });
+    }
+    if (completion_state.level_3_secret) {
+        cart.rect(.{ .x = 12, .y = 2 * 10 + 21, .width = 5, .height = 5, .fill_color = white });
+    }
+    if (completion_state.level_5_secret) {
+        cart.rect(.{ .x = 12, .y = 4 * 10 + 21, .width = 5, .height = 5, .fill_color = white });
     }
 
     // Cursor
-    cart.rect(.{ .x = 21, .y = (level - 1) * 10 + 21, .width = 8, .height = 8, .fill_color = blue });
+    if (level < 9) {
+        cart.rect(.{ .x = 11, .y = (level - 1) * 10 + 20, .width = 8, .height = 8, .fill_color = blue });
+    } else {
+        cart.rect(.{ .x = 81, .y = 3 * 10 + 20, .width = 8, .height = 8, .fill_color = blue });
+    }
 }
 
 fn drawTextCentered(str: []const u8, y: u8, scale: u3, color: cart.DisplayColor) void {
