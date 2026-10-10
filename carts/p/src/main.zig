@@ -113,14 +113,17 @@ fn updateLevel(level: u8, new_controls: cart.Controls) void {
     if (new_controls.up and state.pos.y > 0) state.pos.y -= 1;
     if (new_controls.down and state.pos.y < 7) state.pos.y += 1;
     if (old_pos != state.pos) {
-        checkDots(level);
+        checkDots(level, .movement);
+    }
+    if (new_controls.a) {
+        checkDots(level, .a_press);
     }
 }
 
 fn beginLevel(level: u8) void {
     super_state = .{ .level = level };
     state = .{};
-    checkDots(level);
+    checkDots(level, .movement);
 }
 
 const Level = struct {
@@ -129,6 +132,7 @@ const Level = struct {
     title_line2: []const u8 = "",
     phase1_fns: []const *const fn (*[10][8]Dot) void = &.{},
     phase2_fns: []const *const fn (*[10][8]Dot) void = &.{},
+    a_press_fns: []const *const fn (*[10][8]Dot) void = &.{},
     check_win_fn: *const fn () u8,
 };
 const levels = [_]Level{
@@ -164,6 +168,15 @@ const levels = [_]Level{
         .phase2_fns = &.{@"».÷»¯"},
         .check_win_fn = @"10.5¯÷¶",
     },
+    .{
+        .title = "Level 5",
+        .title_line1 = fromUtf8("¿+_÷.+. ¯¿🅰÷»¯"),
+        .title_line2 = fromUtf8("_+.÷¯ 40¯÷¶"),
+        .phase1_fns = &.{@"¿+_÷.+."},
+        .phase2_fns = &.{@"_+.÷¯"},
+        .a_press_fns = &.{@"¯¿🅰÷»¯"},
+        .check_win_fn = @"40¯÷¶",
+    },
 };
 
 fn drawLevelTitle(level: u8) void {
@@ -174,16 +187,26 @@ fn drawLevelTitle(level: u8) void {
     drawTextCentered(levels[level - 1].title_line2, 70, 1, yellow);
 }
 
-fn checkDots(level: u8) void {
+fn checkDots(level: u8, from_which_input: enum { movement, a_press }) void {
     var output = state.dots;
-    for (levels[level - 1].phase1_fns) |f| {
-        f(&output);
+    switch (from_which_input) {
+        .movement => {
+            for (levels[level - 1].phase1_fns) |f| {
+                f(&output);
+            }
+            state.dots = output;
+            for (levels[level - 1].phase2_fns) |f| {
+                f(&output);
+            }
+            state.dots = output;
+        },
+        .a_press => {
+            for (levels[level - 1].a_press_fns) |f| {
+                f(&output);
+            }
+            state.dots = output;
+        },
     }
-    state.dots = output;
-    for (levels[level - 1].phase2_fns) |f| {
-        f(&output);
-    }
-    state.dots = output;
 
     const pixel_count = levels[level - 1].check_win_fn();
     for (cart.neopixels, 0..) |*neopixel, i| {
@@ -260,9 +283,7 @@ fn @"¿+_÷+."(output: *[10][8]Dot) void {
 fn @"».÷»¯"(output: *[10][8]Dot) void {
     for (0..8) |y| {
         if (isRow(y, .mid)) {
-            for (0..10) |x| {
-                output[x][y] = .high;
-            }
+            fillRow(output, y, .high);
         }
     }
 }
@@ -317,6 +338,35 @@ fn @"10.5¯÷¶"() u8 {
     }
 }
 
+fn @"¿+_÷.+."(output: *[10][8]Dot) void {
+    const x = state.pos.x;
+    const y = state.pos.y;
+    if (isCross(x, y, .off)) {
+        output[x][y] = .mid;
+        fillCross(output, x, y, .mid);
+    }
+}
+
+fn @"¯¿🅰÷»¯"(output: *[10][8]Dot) void {
+    const x = state.pos.x;
+    const y = state.pos.y;
+    if (state.dots[x][y] != .high) return;
+    if (!cart.controls.a) return;
+    fillRow(output, y, .high);
+}
+
+fn @"40¯÷¶"() u8 {
+    var high_count: u8 = 0;
+    for (0..10) |x| {
+        for (0..8) |y| {
+            if (state.dots[x][y] == .high) {
+                high_count += 1;
+            }
+        }
+    }
+    return @min(5, @divCeil(high_count, 8));
+}
+
 fn isCross(x: usize, y: usize, value: Dot) bool {
     if (x == 0 or x == 9 or y == 0 or y == 7) return false; // Too close to the edge.
     return (state.dots[x - 1][y] == value and
@@ -330,6 +380,12 @@ fn isRow(y: usize, value: Dot) bool {
         if (state.dots[x][y] != value) return false;
     }
     return true;
+}
+
+fn fillRow(output: *[10][8]Dot, y: usize, value: Dot) void {
+    for (0..10) |x| {
+        output[x][y] = value;
+    }
 }
 
 fn fillCross(output: *[10][8]Dot, x: usize, y: usize, value: Dot) void {
