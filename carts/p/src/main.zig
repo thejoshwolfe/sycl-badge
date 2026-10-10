@@ -71,7 +71,7 @@ pub fn update() void {
             if (new_controls.up and level > 1) {
                 super_state = .{ .level_select = level - 1 };
             }
-            if (new_controls.down and level <= levels.len) {
+            if (new_controls.down and level < levels.len) {
                 super_state = .{ .level_select = level + 1 };
             }
         },
