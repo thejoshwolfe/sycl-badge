@@ -99,7 +99,7 @@ fn updateLevel(level: u8, new_controls: cart.Controls) void {
         const t = (now - t0) / 10_000;
         if (t > 160 + 128 and new_controls.a) {
             clearNeopixels();
-            if (level < 3) {
+            if (level < levels.len) {
                 super_state = .{ .level_title = level + 1 };
             } else {
                 super_state = .main_menu;
@@ -197,11 +197,11 @@ const levels = [_]Level{
     },
     .{
         .title = "Level 8",
-        .title_line1 = fromUtf8("_¿%. 54_¿».×.🅰%+^"),
+        .title_line1 = fromUtf8("_¿%. 54_».¿×.🅰%+^"),
         .title_line2 = fromUtf8("4¯%_ 3¯%^ ¯%_ 5/%¶"),
         .phase1_fns = &.{@"4¯%_ 3¯%^ ¯%_"},
         .phase2_fns = &.{@"_¿%."},
-        .a_press_fns = &.{@"54_¿».×.🅰%+^"},
+        .a_press_fns = &.{@"54_».¿×.🅰%+^"},
         .check_win_fn = @"5/%¶",
     },
 };
@@ -449,7 +449,7 @@ fn @"4¯%_ 3¯%^ ¯%_"(output: *[10][8]Dot) void {
     }
 }
 
-fn @"54_¿».×.🅰%+^"(output: *[10][8]Dot) void {
+fn @"54_».¿×.🅰%+^"(output: *[10][8]Dot) void {
     var low_count: u8 = 0;
     for (0..10) |x| {
         for (0..8) |y| {
