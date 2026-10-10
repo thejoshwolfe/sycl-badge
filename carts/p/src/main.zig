@@ -68,11 +68,11 @@ pub fn update() void {
             if (new_controls.start) {
                 super_state = .main_menu;
             }
-            if (new_controls.up and level > 1) {
-                super_state = .{ .level_select = level - 1 };
+            if (new_controls.up) {
+                super_state = .{ .level_select = if (level == 1) levels.len else level - 1 };
             }
-            if (new_controls.down and level < levels.len) {
-                super_state = .{ .level_select = level + 1 };
+            if (new_controls.down) {
+                super_state = .{ .level_select = if (level == levels.len) 1 else level + 1 };
             }
         },
     }
@@ -185,6 +185,24 @@ const levels = [_]Level{
         .phase2_fns = &.{@"_+.%¯"},
         .a_press_fns = &.{@"¯¿🅰%»¯"},
         .check_win_fn = @"40¯%¶",
+    },
+    .{
+        .title = "Level 7",
+        .title_line1 = fromUtf8("_¿%. .¿%_"),
+        .title_line2 = fromUtf8("¿+_×.🅰%×^ 5¯%¶"),
+        .phase1_fns = &.{ @"_¿%.", @".¿%_" },
+        .phase2_fns = &.{},
+        .a_press_fns = &.{@"¿+_×.🅰%×^"},
+        .check_win_fn = @"5¯%¶",
+    },
+    .{
+        .title = "Level 8",
+        .title_line1 = fromUtf8("_¿%. 54_¿».×.🅰%+^"),
+        .title_line2 = fromUtf8("4¯%_ 3¯%^ ¯%_ 5/%¶"),
+        .phase1_fns = &.{@"4¯%_ 3¯%^ ¯%_"},
+        .phase2_fns = &.{@"_¿%."},
+        .a_press_fns = &.{@"54_¿».×.🅰%+^"},
+        .check_win_fn = @"5/%¶",
     },
 };
 
@@ -360,7 +378,6 @@ fn @"¯¿🅰%»¯"(output: *[10][8]Dot) void {
     const x = state.pos.x;
     const y = state.pos.y;
     if (state.dots[x][y] != .high) return;
-    if (!cart.controls.a) return;
     fillRow(output, y, .high);
 }
 
@@ -380,7 +397,6 @@ fn @"».¿🅰%+^"(output: *[10][8]Dot) void {
     const x = state.pos.x;
     const y = state.pos.y;
     if (!isRow(y, .mid)) return;
-    if (!cart.controls.a) return;
     incrementCross(output, x, y);
 }
 
@@ -394,6 +410,60 @@ fn @"5/%¶"() u8 {
         }
     }
     return @min(5, super_count);
+}
+
+fn @"¿+_×.🅰%×^"(output: *[10][8]Dot) void {
+    const x = state.pos.x;
+    const y = state.pos.y;
+    if (!isCross(x, y, .low)) return;
+    if (!isDiagonal(x, y, .mid)) return;
+    incrementDiagonal(output, x, y);
+}
+
+fn @"4¯%_ 3¯%^ ¯%_"(output: *[10][8]Dot) void {
+    var high_count: u8 = 0;
+    for (0..10) |x| {
+        for (0..8) |y| {
+            if (state.dots[x][y] == .high) {
+                high_count += 1;
+            }
+        }
+    }
+
+    if (high_count == 3) {
+        for (0..10) |x| {
+            for (0..8) |y| {
+                if (state.dots[x][y] == .high) {
+                    output[x][y] = .super;
+                }
+            }
+        }
+    } else {
+        for (0..10) |x| {
+            for (0..8) |y| {
+                if (state.dots[x][y] == .high) {
+                    output[x][y] = .low;
+                }
+            }
+        }
+    }
+}
+
+fn @"54_¿».×.🅰%+^"(output: *[10][8]Dot) void {
+    var low_count: u8 = 0;
+    for (0..10) |x| {
+        for (0..8) |y| {
+            if (state.dots[x][y] == .low) {
+                low_count += 1;
+            }
+        }
+    }
+    if (low_count < 54) return;
+    const x = state.pos.x;
+    const y = state.pos.y;
+    if (!isRow(y, .mid)) return;
+    if (!isDiagonal(x, y, .mid)) return;
+    incrementCross(output, x, y);
 }
 
 fn isCross(x: usize, y: usize, value: Dot) bool {
@@ -431,6 +501,21 @@ fn incrementCross(output: *[10][8]Dot, x: usize, y: usize) void {
     if (y < 7) output[x][y + 1] = incrementValue(state.dots[x][y + 1]);
 }
 
+fn isDiagonal(x: usize, y: usize, value: Dot) bool {
+    if (x == 0 or x == 9 or y == 0 or y == 7) return false; // Too close to the edge.
+    return (state.dots[x - 1][y - 1] == value and
+        state.dots[x + 1][y - 1] == value and
+        state.dots[x + 1][y + 1] == value and
+        state.dots[x - 1][y + 1] == value);
+}
+
+fn incrementDiagonal(output: *[10][8]Dot, x: usize, y: usize) void {
+    if (x > 0 and y > 0) output[x - 1][y - 1] = incrementValue(state.dots[x - 1][y - 1]);
+    if (x < 9 and y > 0) output[x + 1][y - 1] = incrementValue(state.dots[x + 1][y - 1]);
+    if (x < 9 and y < 7) output[x + 1][y + 1] = incrementValue(state.dots[x + 1][y + 1]);
+    if (x > 0 and y < 7) output[x - 1][y + 1] = incrementValue(state.dots[x - 1][y + 1]);
+}
+
 fn incrementValue(value: Dot) Dot {
     return switch (value) {
         .low => .mid,
@@ -461,6 +546,7 @@ fn rgb256(r: u8, g: u8, b: u8) cart.DisplayColor {
 fn draw() void {
     switch (super_state) {
         .main_menu => {
+            clearNeopixels();
             drawControls();
             drawTextCentered("p is for", 10, 2, white);
             drawTextCentered("puzzle", 35, 3, white);
