@@ -14,7 +14,7 @@ pub fn start() void {
     draw();
 }
 
-const Dot = enum { low, mid, high };
+const Dot = enum { low, mid, high, super };
 
 var last_controls: cart.Controls = @fromBackingInt(0xffff);
 var super_state: union(enum) {
@@ -176,6 +176,15 @@ const levels = [_]Level{
         .phase2_fns = &.{@"_+.%¯"},
         .a_press_fns = &.{@"¯¿🅰%»¯"},
         .check_win_fn = @"40¯%¶",
+    },
+    .{
+        .title = "Level 6",
+        .title_line1 = fromUtf8("_¿%. ¯¿%_"),
+        .title_line2 = fromUtf8("».¿🅰%+^ 5/%¶"),
+        .phase1_fns = &.{ @"_¿%.", @"¯¿%_" },
+        .phase2_fns = &.{},
+        .a_press_fns = &.{@"».¿🅰%+^"},
+        .check_win_fn = @"5/%¶",
     },
 };
 
@@ -367,6 +376,26 @@ fn @"40¯%¶"() u8 {
     return @min(5, @divCeil(high_count, 8));
 }
 
+fn @"».¿🅰%+^"(output: *[10][8]Dot) void {
+    const x = state.pos.x;
+    const y = state.pos.y;
+    if (!isRow(y, .mid)) return;
+    if (!cart.controls.a) return;
+    incrementCross(output, x, y);
+}
+
+fn @"5/%¶"() u8 {
+    var super_count: u8 = 0;
+    for (0..10) |x| {
+        for (0..8) |y| {
+            if (state.dots[x][y] == .super) {
+                super_count += 1;
+            }
+        }
+    }
+    return @min(5, super_count);
+}
+
 fn isCross(x: usize, y: usize, value: Dot) bool {
     if (x == 0 or x == 9 or y == 0 or y == 7) return false; // Too close to the edge.
     return (state.dots[x - 1][y] == value and
@@ -393,6 +422,22 @@ fn fillCross(output: *[10][8]Dot, x: usize, y: usize, value: Dot) void {
     if (x < 9) output[x + 1][y] = value;
     if (y > 0) output[x][y - 1] = value;
     if (y < 7) output[x][y + 1] = value;
+}
+
+fn incrementCross(output: *[10][8]Dot, x: usize, y: usize) void {
+    if (x > 0) output[x - 1][y] = incrementValue(state.dots[x - 1][y]);
+    if (x < 9) output[x + 1][y] = incrementValue(state.dots[x + 1][y]);
+    if (y > 0) output[x][y - 1] = incrementValue(state.dots[x][y - 1]);
+    if (y < 7) output[x][y + 1] = incrementValue(state.dots[x][y + 1]);
+}
+
+fn incrementValue(value: Dot) Dot {
+    return switch (value) {
+        .low => .mid,
+        .mid => .high,
+        .high => .super,
+        .super => .low,
+    };
 }
 
 fn clearNeopixels() void {
@@ -490,7 +535,10 @@ fn drawLevel() void {
                     .low => black,
                     .mid => yellow,
                     .high => purple,
+                    .super => white,
                 };
+                // Super dots are slightly larger.
+                if ((x + 11) % 16 < 6 and (y + 11) % 16 < 6 and state.dots[x >> 4][y >> 4] == .super) break :blk white;
                 if (state.background_animation_start) |t0| {
                     const t = (now - t0) / 10_000;
                     if (t < x + y) break :blk black;
