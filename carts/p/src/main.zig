@@ -156,6 +156,14 @@ const levels = [_]Level{
         .phase2_fns = &.{@"_+.÷¯"},
         .check_win_fn = @"¿+¯÷¶",
     },
+    .{
+        .title = "Level 4",
+        .title_line1 = fromUtf8("_¿÷. ¯¿÷_"),
+        .title_line2 = fromUtf8("».÷»¯ 10.5¯÷¶"),
+        .phase1_fns = &.{ @"_¿÷.", @"¯¿÷_" },
+        .phase2_fns = &.{@"».÷»¯"},
+        .check_win_fn = @"10.5¯÷¶",
+    },
 };
 
 fn drawLevelTitle(level: u8) void {
@@ -230,7 +238,7 @@ fn @"_+.÷¯"(output: *[10][8]Dot) void {
 }
 
 fn @"5¯÷¶"() u8 {
-    var high_count: u16 = 0;
+    var high_count: u8 = 0;
     for (0..10) |x| {
         for (0..8) |y| {
             if (state.dots[x][y] == .high) {
@@ -270,7 +278,7 @@ fn @"¯÷+¯"(output: *[10][8]Dot) void {
 }
 
 fn @"80¯÷¶"() u8 {
-    var high_count: u16 = 0;
+    var high_count: u8 = 0;
     for (0..10) |x| {
         for (0..8) |y| {
             if (state.dots[x][y] == .high) {
@@ -283,6 +291,26 @@ fn @"80¯÷¶"() u8 {
 
 fn @"¿+¯÷¶"() u8 {
     if (isCross(state.pos.x, state.pos.y, .high)) {
+        return 5;
+    } else {
+        return 0;
+    }
+}
+
+fn @"10.5¯÷¶"() u8 {
+    var mid_count: u8 = 0;
+    var high_count: u8 = 0;
+    for (0..10) |x| {
+        for (0..8) |y| {
+            if (state.dots[x][y] == .mid) {
+                mid_count += 1;
+            } else if (state.dots[x][y] == .high) {
+                high_count += 1;
+            }
+        }
+    }
+    // No help.
+    if (mid_count == 10 and high_count == 5) {
         return 5;
     } else {
         return 0;
