@@ -29,6 +29,12 @@ var state: struct {
     zap_animation: ?struct { x: u8, y: u8, ttl: u64 } = null,
     background_animation_start: ?u64 = null,
 } = .{};
+var completion_state: struct {
+    levels_completed: [8]bool = @splat(false),
+    level_1_secret: bool = false,
+    level_3_secret: bool = false,
+    level_5_secret: bool = false,
+} = .{};
 
 pub fn update() void {
     defer draw();
@@ -80,7 +86,7 @@ pub fn update() void {
 
 fn updateLevel(level: u8, new_controls: cart.Controls) void {
     // Meta navigation.
-    if (new_controls.b) {
+    if (new_controls.b and levels[level - 1].b_press_fns.len == 0) {
         // Reset.
         super_state = .{ .level_title = level };
         return;
@@ -113,17 +119,24 @@ fn updateLevel(level: u8, new_controls: cart.Controls) void {
     if (new_controls.up and state.pos.y > 0) state.pos.y -= 1;
     if (new_controls.down and state.pos.y < 7) state.pos.y += 1;
     if (old_pos != state.pos) {
-        checkDots(level, .movement);
+        _ = checkDots(level, .movement);
     }
     if (new_controls.a) {
-        checkDots(level, .a_press);
+        _ = checkDots(level, .a_press);
+    }
+    if (levels[level - 1].b_press_fns.len > 0 and new_controls.b) {
+        if (!checkDots(level, .b_press)) {
+            // Reset.
+            super_state = .{ .level_title = level };
+            return;
+        }
     }
 }
 
 fn beginLevel(level: u8) void {
     super_state = .{ .level = level };
     state = .{};
-    checkDots(level, .movement);
+    _ = checkDots(level, .movement);
 }
 
 const Level = struct {
@@ -133,6 +146,7 @@ const Level = struct {
     phase1_fns: []const *const fn (*[10][8]Dot) void = &.{},
     phase2_fns: []const *const fn (*[10][8]Dot) void = &.{},
     a_press_fns: []const *const fn (*[10][8]Dot) void = &.{},
+    b_press_fns: []const *const fn () bool = &.{},
     check_win_fn: *const fn () u8,
 };
 const levels = [_]Level{
@@ -170,9 +184,9 @@ const levels = [_]Level{
     },
     .{
         .title = "Level 5",
-        .title_line1 = fromUtf8("_¿%. ¯¿%_"),
+        .title_line1 = fromUtf8("_¿%. ¯¿%."),
         .title_line2 = fromUtf8("».¿🅰%+^ 5/%¶"),
-        .phase1_fns = &.{ @"_¿%.", @"¯¿%_" },
+        .phase1_fns = &.{ @"_¿%.", @"¯¿%." },
         .phase2_fns = &.{},
         .a_press_fns = &.{@"».¿🅰%+^"},
         .check_win_fn = @"5/%¶",
@@ -204,6 +218,15 @@ const levels = [_]Level{
         .a_press_fns = &.{@"54_».¿×.🅰%+^"},
         .check_win_fn = @"5/%¶",
     },
+    .{
+        .title = "Level ??",
+        .title_line1 = fromUtf8("1£8¯%×/ 3£¿×¯%»/"),
+        .title_line2 = fromUtf8("5£¿×/%×/ ¿+/🅱%¶"),
+        .phase1_fns = &.{@"1£8¯%×/ 3£¿×¯%»/ 5£¿×/%×/"},
+        .phase2_fns = &.{},
+        .b_press_fns = &.{@"¿+/🅱%¶"},
+        .check_win_fn = @"5/%¶",
+    },
 };
 
 fn drawLevelTitle(level: u8) void {
@@ -214,8 +237,9 @@ fn drawLevelTitle(level: u8) void {
     drawTextCentered(levels[level - 1].title_line2, 70, 1, yellow);
 }
 
-fn checkDots(level: u8, from_which_input: enum { movement, a_press }) void {
+fn checkDots(level: u8, from_which_input: enum { movement, a_press, b_press }) bool {
     var output = state.dots;
+    var b_press_handled = false;
     switch (from_which_input) {
         .movement => {
             for (levels[level - 1].phase1_fns) |f| {
@@ -233,6 +257,12 @@ fn checkDots(level: u8, from_which_input: enum { movement, a_press }) void {
             }
             state.dots = output;
         },
+        .b_press => {
+            for (levels[level - 1].b_press_fns) |f| {
+                if (f()) b_press_handled = true;
+            }
+            state.dots = output;
+        },
     }
 
     const pixel_count = levels[level - 1].check_win_fn();
@@ -246,6 +276,8 @@ fn checkDots(level: u8, from_which_input: enum { movement, a_press }) void {
     if (pixel_count == 5) {
         state.background_animation_start = cart.micros_since_boot();
     }
+
+    return b_press_handled;
 }
 
 fn @"_¿%."(output: *[10][8]Dot) void {
@@ -269,6 +301,14 @@ fn @"¯¿%_"(output: *[10][8]Dot) void {
     const y = state.pos.y;
     if (state.dots[x][y] == .high) {
         output[x][y] = .low;
+    }
+}
+
+fn @"¯¿%."(output: *[10][8]Dot) void {
+    const x = state.pos.x;
+    const y = state.pos.y;
+    if (state.dots[x][y] == .high) {
+        output[x][y] = .mid;
     }
 }
 
@@ -466,6 +506,16 @@ fn @"54_».¿×.🅰%+^"(output: *[10][8]Dot) void {
     incrementCross(output, x, y);
 }
 
+fn @"1£8¯%×/ 3£¿×¯%»/ 5£¿×/%×/"(output: *[10][8]Dot) void {
+    if (completion_state.level_1_secret) fillCross(output, 0, 0, .super);
+    if (completion_state.level_3_secret) fillRow(output, 2, .super);
+    if (completion_state.level_5_secret) fillCross(output, 0, 4, .super);
+}
+
+fn @"¿+/🅱%¶"() bool {
+    return false;
+}
+
 fn isCross(x: usize, y: usize, value: Dot) bool {
     if (x == 0 or x == 9 or y == 0 or y == 7) return false; // Too close to the edge.
     return (state.dots[x - 1][y] == value and
@@ -574,10 +624,20 @@ fn drawControls() void {
 
 fn drawLevelSelect(level: u8) void {
     cart.rect(.{ .x = 0, .y = 0, .width = 160, .height = 128, .fill_color = black });
-    for (levels, 0..) |level_defs, i| {
+    // Titles
+    for (levels[0..8], 0..) |level_defs, i| {
         cart.text(.{ .x = 30, .y = @intCast(20 + i * 10), .text_color = white, .str = level_defs.title });
     }
 
+    // Completion dots
+    for (0..8) |i| {
+        // TODO: backwards
+        if (!completion_state.levels_completed[i]) {
+            cart.rect(.{ .x = 23, .y = @as(i32, @intCast(i)) * 10 + 22, .width = 4, .height = 4, .fill_color = purple });
+        }
+    }
+
+    // Cursor
     cart.rect(.{ .x = 21, .y = (level - 1) * 10 + 21, .width = 8, .height = 8, .fill_color = blue });
 }
 

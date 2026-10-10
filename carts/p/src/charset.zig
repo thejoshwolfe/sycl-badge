@@ -35,6 +35,7 @@ test fromUtf8 {
 /// Convert a string literal at comptime to the cart's charset.
 pub inline fn fromUtf8(comptime s: []const u8) []const u8 {
     comptime {
+        @setEvalBranchQuota(5000);
         var utf8 = (Utf8View.init(s) catch unreachable).iterator();
         var result: []const u8 = "";
         while (utf8.nextCodepoint()) |codepoint| {
