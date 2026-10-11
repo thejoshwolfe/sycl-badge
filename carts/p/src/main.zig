@@ -35,6 +35,7 @@ var state: struct {
     dots: [10][8]Dot = @splat(@splat(.low)),
     zap_animation: ?struct { x: u8, y: u8, ttl: u64 } = null,
     background_animation_start: ?u64 = null,
+    key_repeat: union(enum) { none, left: u64, right: u64, up: u64, down: u64 } = .none,
 } = .{};
 var completion_state: struct {
     levels_completed: [8]bool = @splat(false),
@@ -46,9 +47,41 @@ var completion_state: struct {
 pub fn update() void {
     defer draw();
     const controls = cart.controls.*;
-    const new_controls: cart.Controls = @fromBackingInt(@backingInt(controls) & ~@backingInt(last_controls));
+    var new_controls: cart.Controls = @fromBackingInt(@backingInt(controls) & ~@backingInt(last_controls));
     defer {
         last_controls = controls;
+    }
+
+    if (new_controls.up) state.key_repeat = .{ .up = cart.micros_since_boot() + 300_000 };
+    if (new_controls.down) state.key_repeat = .{ .down = cart.micros_since_boot() + 300_000 };
+    if (new_controls.left) state.key_repeat = .{ .left = cart.micros_since_boot() + 300_000 };
+    if (new_controls.right) state.key_repeat = .{ .right = cart.micros_since_boot() + 300_000 };
+    switch (state.key_repeat) {
+        .none => {},
+        .up => |t| if (!cart.controls.up) {
+            state.key_repeat = .none;
+        } else if (t <= cart.micros_since_boot()) {
+            new_controls.up = true;
+            state.key_repeat = .{ .up = t + 80_000 };
+        },
+        .down => |t| if (!cart.controls.down) {
+            state.key_repeat = .none;
+        } else if (t <= cart.micros_since_boot()) {
+            new_controls.down = true;
+            state.key_repeat = .{ .down = t + 80_000 };
+        },
+        .left => |t| if (!cart.controls.left) {
+            state.key_repeat = .none;
+        } else if (t <= cart.micros_since_boot()) {
+            new_controls.left = true;
+            state.key_repeat = .{ .left = t + 80_000 };
+        },
+        .right => |t| if (!cart.controls.right) {
+            state.key_repeat = .none;
+        } else if (t <= cart.micros_since_boot()) {
+            new_controls.right = true;
+            state.key_repeat = .{ .right = t + 80_000 };
+        },
     }
 
     switch (super_state) {
