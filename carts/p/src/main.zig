@@ -302,7 +302,7 @@ fn checkDots(level: u8, from_which_input: enum { movement, a_press }) void {
     const pixel_count = levels[level - 1].check_win_fn();
     for (cart.neopixels, 0..) |*neopixel, i| {
         if (i < pixel_count) {
-            neopixel.* = .{ .r = 0xff, .g = 0x0, .b = 0xff };
+            neopixel.* = .{ .r = 0xff >> 2, .g = 0x0, .b = 0xff >> 2 };
         } else {
             neopixel.* = .{ .r = 0x0, .g = 0x0, .b = 0x0 };
         }
